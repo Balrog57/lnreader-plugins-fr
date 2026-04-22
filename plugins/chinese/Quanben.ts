@@ -17,17 +17,17 @@ const parseUrl = (url?: string): URL | undefined => {
 const getStandardNovelPath = (url?: string): string | undefined => {
   const parsedUrl = parseUrl(url);
   if (!parsedUrl) return undefined;
-  const match = parsedUrl.pathname.match(/^(\/amp)?(\/n\/[^\/]+\/)/);
+  const match = parsedUrl.pathname.match(/^(\/amp)?(\/n\/[^/]+\/)/);
   return match?.[2]?.replace(/^\//, '');
 };
 
-const getChapterFileName = (url?: string): string | undefined => {
-  const parsedUrl = parseUrl(url);
-  if (!parsedUrl) return undefined;
-  const fileName = parsedUrl.pathname.split('/').pop();
-  if (fileName && /^\d+\.html$/.test(fileName)) return fileName;
-  return undefined;
-};
+// const getChapterFileName = (url?: string): string | undefined => {
+//   const parsedUrl = parseUrl(url);
+//   if (!parsedUrl) return undefined;
+//   const fileName = parsedUrl.pathname.split('/').pop();
+//   if (fileName && /^\d+\.html$/.test(fileName)) return fileName;
+//   return undefined;
+// };
 
 const makeAbsolute = (
   relativeUrl?: string,
@@ -47,7 +47,7 @@ class QuanbenPlugin implements Plugin.PluginBase {
   id = 'quanben';
   name = 'Quanben';
   site = 'https://www.quanben.io/';
-  version = '1.1.0';
+  version = '1.1.1';
   icon = 'src/cn/quanben/icon.png';
   defaultCover = defaultCover;
 
@@ -192,7 +192,7 @@ class QuanbenPlugin implements Plugin.PluginBase {
   async parseChapterList(novelPath: string): Promise<Plugin.ChapterItem[]> {
     if (!novelPath.startsWith('n/') || !novelPath.endsWith('/')) return [];
 
-    const novelSlug = novelPath.match(/^n\/([^\/]+)\//)?.[1];
+    const novelSlug = novelPath.match(/^n\/([^/]+)\//)?.[1];
     if (!novelSlug) return [];
 
     const mirrorUrl = `https://quanben5.com/n/${novelSlug}/xiaoshuo.html`;
@@ -230,7 +230,7 @@ class QuanbenPlugin implements Plugin.PluginBase {
   // Helper function to extract and clean chapter content from HTML body
   private extractChapterContent(body: string): string {
     const $ = parseHTML(body);
-    let $content = $('#contentbody, #content, .content').first();
+    const $content = $('#contentbody, #content, .content').first();
     if (!$content.length) return 'Error: Chapter content not found.';
 
     $content
