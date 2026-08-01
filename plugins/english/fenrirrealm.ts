@@ -75,7 +75,7 @@ class FenrirRealmPlugin implements Plugin.PluginBase {
   name = 'Fenrir Realm';
   icon = 'src/en/fenrirrealm/icon.png';
   site = 'https://fenrirealm.com';
-  version = '1.1.1';
+  version = '1.1.2';
   imageRequestInit?: Plugin.ImageRequestInit | undefined = undefined;
 
   hideLocked = storage.get('hideLocked');
@@ -304,9 +304,20 @@ class FenrirRealmPlugin implements Plugin.PluginBase {
 
     const loadedCheerio = loadCheerio(body);
 
-    let chapterText = loadedCheerio('div.content-area p')
-      .map((_, el) => `<p>${loadCheerio(el).html()}</p>`)
+    // Clean up anti-scraping and watermark elements first
+    loadedCheerio('[aria-hidden="true"]').remove();
+    loadedCheerio('.reader-attribution').remove();
+    loadedCheerio('[data-fr-attr]').remove();
+
+    let chapterText = loadedCheerio(
+      '.reader-area p, div.content-area p, [id^="reader-area"] p',
+    )
+      .map((_, el) => {
+        const html = loadedCheerio(el).html()?.trim();
+        return html ? `<p>${html}</p>` : '';
+      })
       .get()
+      .filter(Boolean)
       .join('\n');
 
     if (chapterText) {
@@ -400,8 +411,9 @@ class FenrirRealmPlugin implements Plugin.PluginBase {
     };
   }
 
-  // resolveUrl = (path: string, isNovel?: boolean) =>
-  //    this.site + '/series/' + path.split('~~')[0];
+  resolveUrl(path: string): string {
+    return `${this.site}/series/${path.split('~~')[0]}`;
+  }
 
   filters = {
     status: {
