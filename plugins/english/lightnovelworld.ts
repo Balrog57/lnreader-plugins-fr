@@ -23,7 +23,7 @@ export class LightNovelWorldPlugin implements Plugin.PluginBase {
     name = "LightNovelWorld";
     icon = "src/en/lightnovelworld/icon.png";
     site = "https://lightnovelworld.org/";
-    version = "1.0.0";
+    version = "1.0.1";
 
     filters = {
         sort: {
@@ -132,7 +132,7 @@ export class LightNovelWorldPlugin implements Plugin.PluginBase {
                 { label: 'All', value: 'all' },
                 { label: '<50', value: '<50' },
                 { label: '50-100', value: '50-100' },
-                { label: '100-500', value: '500-1000' },
+                { label: '100-500', value: '100-500' },
                 { label: '500-1000', value: '500-1000' },
                 { label: '>1000', value: '>1000' },
             ],
