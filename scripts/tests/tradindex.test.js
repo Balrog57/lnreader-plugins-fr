@@ -72,7 +72,7 @@ test('Trad-Index lists only prose sources and searches the two novel catalogues'
   );
   t.after(restore);
 
-  assert.equal(plugin.version, '1.0.2');
+  assert.equal(plugin.version, '1.0.3');
 
   const popular = await plugin.popularNovels(1, {});
   assert.deepEqual(
@@ -83,6 +83,7 @@ test('Trad-Index lists only prose sources and searches the two novel catalogues'
     requests.some(path => /Manhwa|scan/i.test(path)),
     false,
   );
+  assert.equal((await plugin.popularNovels(0, {})).length, popular.length);
   assert.equal(
     popular.some(novel => novel.path === 'scan-interdit'),
     false,
