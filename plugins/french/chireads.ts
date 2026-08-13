@@ -15,7 +15,7 @@ class ChireadsPlugin implements Plugin.PluginBase {
   name = 'Chireads';
   icon = 'src/fr/chireads/icon.png';
   site = 'https://chireads.com';
-  version = '2.0.6';
+  version = '2.0.7';
 
   async getCheerio(url: string): Promise<CheerioAPI> {
     const r = await fetchApi(url, {
@@ -43,10 +43,14 @@ class ChireadsPlugin implements Plugin.PluginBase {
     const parsed = new URL(url, this.site);
     if (!/(?:^|\.)chireads\.com$/i.test(parsed.hostname)) return '';
     const segments = parsed.pathname.split('/').filter(Boolean);
-    const sectionIndex = segments.indexOf('translatedtales');
-    const chapterSlug =
-      sectionIndex >= 0 ? segments[sectionIndex + 2] : undefined;
-    return chapterSlug ? `/c/${chapterSlug}/` : this.toPath(url);
+    if (segments[0] === 'c' && segments[1]) return `/c/${segments[1]}/`;
+
+    const hasDateSuffix =
+      /^\d{4}$/.test(segments.at(-3) || '') &&
+      /^\d{1,2}$/.test(segments.at(-2) || '') &&
+      /^\d{1,2}$/.test(segments.at(-1) || '');
+    const chapterSlug = segments.at(hasDateSuffix ? -4 : -1);
+    return chapterSlug ? `/c/${chapterSlug}/` : '';
   }
 
   private parseCards($: CheerioAPI): Plugin.NovelItem[] {
@@ -162,10 +166,9 @@ class ChireadsPlugin implements Plugin.PluginBase {
   }
 
   async parseChapter(chapterUrl: string): Promise<string> {
-    const compactPath = chapterUrl.startsWith('/c/')
-      ? `/translatedtales/${chapterUrl.slice(3)}`
-      : chapterUrl;
-    const $ = await this.getCheerio(this.site + compactPath);
+    const $ = await this.getCheerio(
+      this.site + this.compactChapterPath(chapterUrl),
+    );
 
     const chapterText = $('#content').html() || '';
 

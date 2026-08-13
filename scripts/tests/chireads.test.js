@@ -32,8 +32,12 @@ const fixtures = {
     <ul class="refresh-detail-chapter-list">
       <li><a href="https://chireads.com/translatedtales/myriad/chapitre-1/2025/01/13/">Chapitre 1 – Père et Fils</a></li>
       <li><a href="https://chireads.com/translatedtales/myriad/chapitre-2/2025/01/14/">Chapitre 2 – Les académies</a></li>
+      <li><a href="https://chireads.com/original/chapitre-3-original/2025/01/15/">Chapitre 3 – Original</a></li>
+      <li><a href="https://chireads.com/uncategorized/chapitre-4-archive/2025/01/16/">Chapitre 4 – Archive</a></li>
     </ul>
   `,
+  '/c/chapitre-3-original/':
+    '<main id="content"><p>Chapitre original.</p></main>',
 };
 
 function fixtureFetch(url) {
@@ -69,7 +73,7 @@ test('Chireads finds Panlong through translated novel categories', async t => {
       },
     ],
   );
-  assert.equal(plugin.version, '2.0.6');
+  assert.equal(plugin.version, '2.0.7');
 });
 
 test('Chireads keeps large chapter lists in one response', async t => {
@@ -133,11 +137,29 @@ test('Chireads parses all visible Myriad of the Races chapters', async t => {
   const novel = await plugin.parseNovel(myriadPath);
   assert.deepEqual(
     novel.chapters.map(chapter => chapter.path),
-    ['/c/chapitre-1/', '/c/chapitre-2/'],
+    [
+      '/c/chapitre-1/',
+      '/c/chapitre-2/',
+      '/c/chapitre-3-original/',
+      '/c/chapitre-4-archive/',
+    ],
   );
   assert.equal(novel.name, 'La Tribulation des Myriades de Races_万族之劫');
   assert.deepEqual(
     novel.chapters.map(chapter => chapter.name),
-    ['1 - Père et Fils', '2 - Les académies'],
+    ['1 - Père et Fils', '2 - Les académies', '3 - Original', '4 - Archive'],
+  );
+});
+
+test('Chireads resolves compact chapter paths through the compact endpoint', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/chireads.ts',
+    fixtureFetch,
+  );
+  t.after(restore);
+
+  assert.match(
+    await plugin.parseChapter('/c/chapitre-3-original/'),
+    /Chapitre original/,
   );
 });
