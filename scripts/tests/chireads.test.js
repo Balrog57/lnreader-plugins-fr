@@ -26,18 +26,18 @@ const fixtures = {
     ]),
   [myriadPath]: `
     <h1 class="refresh-detail-title">La Tribulation des Myriades de Races_万族之劫</h1>
-    <div class="refresh-detail-cover"><img src="https://chireads.com/myriad.jpg"></div>
+    <div class="refresh-detail-cover"><img src="/myriad.jpg"></div>
     <div class="refresh-detail-summary-content">Synopsis public.</div>
     <dl class="refresh-detail-meta"><div><dt>Auteur</dt><dd>Eagle Eats Chicken</dd></div></dl>
     <ul class="refresh-detail-chapter-list">
       <li><a href="https://chireads.com/translatedtales/myriad/chapitre-1/2025/01/13/">Chapitre 1 – Père et Fils</a></li>
+      <li><a href="https://chireads.com/legacy/chapitre-1/2025/01/13/">Chapitre 1 – Père et Fils</a></li>
       <li><a href="https://chireads.com/translatedtales/myriad/chapitre-2/2025/01/14/">Chapitre 2 – Les académies</a></li>
       <li><a href="https://chireads.com/original/chapitre-3-original/2025/01/15/">Chapitre 3 – Original</a></li>
       <li><a href="https://chireads.com/uncategorized/chapitre-4-archive/2025/01/16/">Chapitre 4 – Archive</a></li>
     </ul>
   `,
-  '/c/chapitre-3-original/':
-    '<main id="content"><p>Chapitre original.</p></main>',
+  '/c/chapitre-3-original/': `<main id="content"><div class="sharedaddy">Share this chapter</div><p>${'Chapitre original. '.repeat(20)}</p><script>tracking()</script></main>`,
 };
 
 function fixtureFetch(url) {
@@ -144,7 +144,16 @@ test('Chireads parses all visible Myriad of the Races chapters', async t => {
       '/c/chapitre-4-archive/',
     ],
   );
+  assert.deepEqual(
+    novel.chapters.map(chapter => chapter.chapterNumber),
+    [1, 2, 3, 4],
+  );
+  assert.deepEqual(
+    novel.chapters.map(chapter => chapter.releaseTime),
+    ['2025-01-13', '2025-01-14', '2025-01-15', '2025-01-16'],
+  );
   assert.equal(novel.name, 'La Tribulation des Myriades de Races_万族之劫');
+  assert.equal(novel.cover, 'https://chireads.com/myriad.jpg');
   assert.deepEqual(
     novel.chapters.map(chapter => chapter.name),
     ['1 - Père et Fils', '2 - Les académies', '3 - Original', '4 - Archive'],
@@ -162,4 +171,62 @@ test('Chireads resolves compact chapter paths through the compact endpoint', asy
     await plugin.parseChapter('/c/chapitre-3-original/'),
     /Chapitre original/,
   );
+  assert.doesNotMatch(
+    await plugin.parseChapter('/c/chapitre-3-original/'),
+    /Share this chapter|tracking/,
+  );
+});
+
+test('Chireads keeps successful category results when the other parent fails', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/chireads.ts',
+    url => {
+      if (url.includes('parent=2')) return Promise.reject(new Error('offline'));
+      return fixtureFetch(url);
+    },
+  );
+  t.after(restore);
+
+  const results = await plugin.searchNovels('Across the Wall', 1);
+  assert.deepEqual(
+    results.map(novel => novel.path),
+    ['/category/original/au-dela-du-mur/'],
+  );
+});
+
+test('Chireads returns no search results when both category parents fail', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/chireads.ts',
+    () => Promise.reject(new Error('offline')),
+  );
+  t.after(restore);
+
+  assert.deepEqual(await plugin.searchNovels('Panlong', 1), []);
+});
+
+test('Chireads rejects non-OK catalogue HTML responses', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/chireads.ts',
+    () => Promise.resolve(new Response('Unavailable', { status: 503 })),
+  );
+  t.after(restore);
+
+  await assert.rejects(plugin.parseNovel(myriadPath), /HTTP.*503/i);
+});
+
+test('Chireads rejects chapter content that is too short to read', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/chireads.ts',
+    url => {
+      if (url.endsWith('/c/short/')) {
+        return Promise.resolve(
+          new Response('<main id="content"><p>Brief.</p></main>'),
+        );
+      }
+      return fixtureFetch(url);
+    },
+  );
+  t.after(restore);
+
+  await assert.rejects(plugin.parseChapter('/c/short/'), /readable/i);
 });

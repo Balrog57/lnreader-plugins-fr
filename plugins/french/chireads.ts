@@ -27,8 +27,18 @@ class ChireadsPlugin implements Plugin.PluginBase {
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
       },
     });
+    if (!r.ok) throw new Error(`HTTP ${r.status} while loading ${url}`);
     const body = await r.text();
     return load(body);
+  }
+
+  private absoluteUrl(url?: string): string {
+    if (!url) return defaultCover;
+    try {
+      return new URL(url, this.site).href;
+    } catch {
+      return defaultCover;
+    }
   }
 
   private toPath(url?: string): string {
@@ -62,8 +72,9 @@ class ChireadsPlugin implements Plugin.PluginBase {
       seen.add(novelUrl);
       novels.push({
         name: $(el).find('.refresh-card-title a').text().trim(),
-        cover:
-          $(el).find('.refresh-card-cover img').attr('src') || defaultCover,
+        cover: this.absoluteUrl(
+          $(el).find('.refresh-card-cover img').attr('src'),
+        ),
         path: this.toPath(novelUrl),
       });
     });
@@ -123,10 +134,10 @@ class ChireadsPlugin implements Plugin.PluginBase {
     const $ = await this.getCheerio(this.site + novelPath);
 
     novel.name = $('h1.refresh-detail-title').first().text().trim();
-    novel.cover =
+    novel.cover = this.absoluteUrl(
       $('.refresh-detail-cover img').attr('src') ||
-      $('.refresh-detail-cover img').attr('data-src') ||
-      defaultCover;
+        $('.refresh-detail-cover img').attr('data-src'),
+    );
     novel.summary = $('.refresh-detail-summary-content').text().trim();
 
     $('.refresh-detail-meta > div').each((i, el) => {
@@ -149,20 +160,32 @@ class ChireadsPlugin implements Plugin.PluginBase {
   }
 
   private parseChapterItems($: CheerioAPI): Plugin.ChapterItem[] {
-    const chapters: Plugin.ChapterItem[] = [];
+    const chapters = new Map<string, Plugin.ChapterItem>();
     $('.refresh-detail-chapter-list a').each((i, el) => {
       const chapterUrl = $(el).attr('href');
       if (!chapterUrl) return;
+      const path = this.compactChapterPath(chapterUrl);
+      if (!path || chapters.has(path)) return;
       const name = $(el).text().trim();
       const compactName = name.match(/^Chapitre\s+(\d+)\s*(?:–|-|:)\s*(.+)$/i);
-      chapters.push({
+      const number = name.match(/\bchapitre\s+(\d+)/i)?.[1];
+      const date = new URL(chapterUrl, this.site).pathname.match(
+        /\/(\d{4})\/(\d{1,2})\/(\d{1,2})\/?$/,
+      );
+      chapters.set(path, {
         name: compactName
           ? `${compactName[1]} - ${compactName[2].trim()}`
           : name,
-        path: this.compactChapterPath(chapterUrl),
+        path,
+        ...(number ? { chapterNumber: Number(number) } : {}),
+        ...(date
+          ? {
+              releaseTime: `${date[1]}-${date[2].padStart(2, '0')}-${date[3].padStart(2, '0')}`,
+            }
+          : {}),
       });
     });
-    return chapters;
+    return [...chapters.values()];
   }
 
   async parseChapter(chapterUrl: string): Promise<string> {
@@ -170,16 +193,22 @@ class ChireadsPlugin implements Plugin.PluginBase {
       this.site + this.compactChapterPath(chapterUrl),
     );
 
-    const chapterText = $('#content').html() || '';
+    const content = $('#content').first();
+    content
+      .find('script, style, iframe, form, nav, footer, .sharedaddy, .ads')
+      .remove();
+    if (content.text().replace(/\s+/g, ' ').trim().length < 200) {
+      throw new Error('Chapter content is not readable');
+    }
 
-    return chapterText;
+    return content.html() || '';
   }
 
   async searchNovels(
     searchTerm: string,
     pageNo: number,
   ): Promise<Plugin.NovelItem[]> {
-    const responses = await Promise.all(
+    const responses = await Promise.allSettled(
       [2, 811].map(parent =>
         fetchApi(
           `${this.site}/wp-json/wp/v2/categories?parent=${parent}&search=${encodeURIComponent(searchTerm)}&per_page=100&page=${pageNo}`,
@@ -187,14 +216,18 @@ class ChireadsPlugin implements Plugin.PluginBase {
       ),
     );
     const categories = (
-      await Promise.all(
-        responses.map(response =>
-          response.ok
-            ? (response.json() as Promise<WordPressCategory[]>)
-            : Promise.resolve([]),
+      await Promise.allSettled(
+        responses.flatMap(response =>
+          response.status === 'fulfilled' && response.value.ok
+            ? [response.value.json() as Promise<WordPressCategory[]>]
+            : [],
         ),
       )
-    ).flat();
+    ).flatMap(response =>
+      response.status === 'fulfilled' && Array.isArray(response.value)
+        ? response.value
+        : [],
+    );
     const seen = new Set<string>();
     return categories
       .map(category => ({
