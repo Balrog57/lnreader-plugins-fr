@@ -211,3 +211,25 @@ test('Trad-Index retries an unavailable chapter page before returning all chapte
     [1, 2, 3],
   );
 });
+
+test('Trad-Index retries an unavailable initial chapter-list page', async t => {
+  let unavailableResponses = 1;
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/tradindex.ts',
+    url => {
+      const parsed = new URL(url);
+      const key = parsed.pathname + parsed.search;
+      if (key === '/oeuvre/dungeon-hunter' && unavailableResponses-- > 0)
+        return Promise.resolve(new Response('Unavailable', { status: 503 }));
+      return fixtureFetch(url);
+    },
+  );
+  t.after(restore);
+
+  assert.deepEqual(
+    (await plugin.parseNovel('dungeon-hunter')).chapters.map(
+      chapter => chapter.chapterNumber,
+    ),
+    [1, 2, 3],
+  );
+});
