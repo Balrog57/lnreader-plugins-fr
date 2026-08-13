@@ -7,7 +7,6 @@ import { filterFrenchSources } from './lib/french-projection.js';
 
 const retainedMultisrcAssets = new Map([
   ['lightnovelwp', new Set(['lightnovelfr'])],
-  ['madara', new Set(['worldnovel'])],
 ]);
 
 export function classifyConflict(file) {

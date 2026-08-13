@@ -32,7 +32,7 @@ test('requires semantic or manual resolution for retained paths', () => {
   assert.equal(classifyConflict('scripts/build-plugin-manifest.js'), 'manual');
   assert.equal(
     classifyConflict('public/static/multisrc/madara/worldnovel/icon.png'),
-    'manual',
+    'remove',
   );
 });
 
@@ -40,14 +40,17 @@ test('merges independent French source changes by id', () => {
   const base = [
     { id: 'kept', sourceSite: 'https://old', options: { lang: 'French' } },
     { id: 'removed-locally', options: { lang: 'French' } },
+    { id: 'worldnovel', options: { lang: 'French' } },
   ];
   const ours = [
     { id: 'kept', sourceSite: 'https://local', options: { lang: 'French' } },
+    { id: 'worldnovel', options: { lang: 'French' } },
   ];
   const theirs = [
     { id: 'kept', sourceSite: 'https://old', options: { lang: 'French' } },
     { id: 'removed-locally', options: { lang: 'French' } },
     { id: 'added-upstream', options: { lang: 'French' } },
+    { id: 'worldnovel', options: { lang: 'French' } },
     { id: 'foreign', options: { lang: 'English' } },
   ];
 
