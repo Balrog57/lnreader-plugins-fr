@@ -5,8 +5,8 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "clean:multisrc": "find . -type f -wholename \"*plugins*\\[*\\]*.[t,j]s\" -delete",
-    "clean:multisrc:windows": "powershell -Command \"Get-ChildItem -Recurse -Include \\\"*].ts\\\",\\\"*].js\\\" | Where-Object { $_.FullName -like \\\"*plugins*\\\" } | Remove-Item\"",
+    "clean:multisrc": "node scripts/clean-generated-plugins.js",
+    "clean:multisrc:windows": "npm run clean:multisrc",
     "dev": "vite",
     "dev:start": "node ./plugins/multisrc/generate-multisrc-plugins.js && vite",
     "build:multisrc": "node ./plugins/multisrc/generate-multisrc-plugins.js",
@@ -25,6 +25,8 @@
     "check:sites": "node scripts/check-plugin-sites.js",
     "check:plugin": "node scripts/live-check-plugin.js",
     "prune:french": "node scripts/prune-to-french.js",
+    "check:french-manifest": "node scripts/assert-french-manifest.js",
+    "test:manifest": "node --test scripts/tests/assert-french-manifest.test.js",
     "test:projection": "node --test scripts/tests/french-projection.test.js",
     "prepare": "husky"
   },

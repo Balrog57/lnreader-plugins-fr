@@ -102,7 +102,7 @@ for (let language in languages) {
   pluginsWithFiltersPerLanguage[language] = 0;
 
   plugins.forEach(plugin => {
-    if (plugin.startsWith('.')) return;
+    if (plugin.startsWith('.') || plugin.includes('.broken.')) return;
     minify(path.join(langPath, plugin));
     const rawCode = fs.readFileSync(
       `${COMPILED_PLUGIN_DIR}/${language.toLowerCase()}/${plugin}`,
