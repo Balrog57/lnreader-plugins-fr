@@ -22,7 +22,7 @@ class LightNovelVFPlugin implements Plugin.PluginBase {
   name = 'LightNovelVF';
   icon = 'src/fr/lightnovelvf/icon.png';
   site = 'https://www.lightnovelvf.com/';
-  version = '1.0.0';
+  version = '1.0.1';
 
   resolveUrl(path: string, _isNovel = false): string {
     const url = new URL(path, this.site);
@@ -111,8 +111,9 @@ class LightNovelVFPlugin implements Plugin.PluginBase {
     searchTerm: string,
     pageNo: number,
   ): Promise<Plugin.NovelItem[]> {
+    const normalizedSearchTerm = searchTerm.replace(/\\(?=%)/g, '');
     return this.parseCards(
-      await this.fetchHtml(this.catalogueUrl(pageNo, searchTerm)),
+      await this.fetchHtml(this.catalogueUrl(pageNo, normalizedSearchTerm)),
     );
   }
 

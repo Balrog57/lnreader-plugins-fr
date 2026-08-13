@@ -13,6 +13,9 @@ const fixtures = {
   '/novels-list?page=2&search=Supreme%20Magus': `
     <a href="/novel/supreme-magus"><img src="/covers/supreme-magus.webp"><span>Supreme Magus</span><span>114 chapitres</span><span>4.8</span></a>
   `,
+  '/novels-list?page=1&search=100%25%20DROP%20RATE%20%3A%20Why%20is%20My%20Inventory%20Always%20so%20Full%3F': `
+    <a href="/novel/100-drop-rate-why-is-my-inventory-always-so-full"><span>100\\% DROP RATE : Why is My Inventory Always so Full?</span><span>20 ch.</span></a>
+  `,
   '/novel/supreme-magus': `
     <h1>Supreme Magus</h1>
     <img class="lnv-novel-cover" src="/covers/supreme-magus.webp">
@@ -109,6 +112,23 @@ test('LightNovelVF builds catalogue and search routes and returns clean cards', 
   assert.ok(requests.includes('/novels-list?page=2&search=Supreme%20Magus'));
 });
 
+test('LightNovelVF removes the site escape before searching percent titles', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/lightnovelvf.ts',
+    fixtureFetch,
+  );
+  t.after(restore);
+
+  const search = await plugin.searchNovels(
+    '100\\% DROP RATE : Why is My Inventory Always so Full?',
+    1,
+  );
+  assert.deepEqual(
+    search.map(novel => novel.path),
+    ['100-drop-rate-why-is-my-inventory-always-so-full'],
+  );
+});
+
 test('LightNovelVF parses metadata, paginated JSON chapters, and readable content', async t => {
   const { plugin, restore } = await loadPluginForTest(
     'plugins/french/lightnovelvf.ts',
@@ -120,7 +140,7 @@ test('LightNovelVF parses metadata, paginated JSON chapters, and readable conten
   assert.equal(plugin.name, 'LightNovelVF');
   assert.equal(plugin.icon, 'src/fr/lightnovelvf/icon.png');
   assert.equal(plugin.site, 'https://www.lightnovelvf.com/');
-  assert.equal(plugin.version, '1.0.0');
+  assert.equal(plugin.version, '1.0.1');
 
   const novel = await plugin.parseNovel('supreme-magus');
   assert.equal(novel.name, 'Supreme Magus');
