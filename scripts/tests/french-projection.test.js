@@ -29,6 +29,20 @@ test('preserves order while removing non-French records', () => {
   );
 });
 
+test('excludes permanently unsupported French sources', () => {
+  const sources = [
+    { id: 'allowed', options: { lang: 'French' } },
+    { id: 'worldnovel', options: { lang: 'French' } },
+    { id: 'MassNovel', options: { lang: 'French' } },
+    { id: 'mtlnovel-fr', options: { lang: 'French' } },
+  ];
+
+  assert.deepEqual(
+    filterFrenchSources(sources).map(source => source.id),
+    ['allowed'],
+  );
+});
+
 test('prunes foreign plugin directories and empty multi-source themes', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lnreader-fr-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -56,6 +70,10 @@ test('prunes foreign plugin directories and empty multi-source themes', t => {
     { recursive: true },
   );
   fs.mkdirSync(
+    path.join(root, 'public', 'static', 'multisrc', 'madara', 'worldnovel'),
+    { recursive: true },
+  );
+  fs.mkdirSync(
     path.join(root, 'public', 'static', 'multisrc', 'readwn', 'en-two'),
     { recursive: true },
   );
@@ -63,6 +81,7 @@ test('prunes foreign plugin directories and empty multi-source themes', t => {
     path.join(root, 'plugins', 'multisrc', 'madara', 'sources.json'),
     JSON.stringify([
       { id: 'fr-one', options: { lang: 'French' } },
+      { id: 'worldnovel', options: { lang: 'French' } },
       { id: 'en-one', options: { lang: 'English' } },
     ]),
   );
@@ -85,6 +104,12 @@ test('prunes foreign plugin directories and empty multi-source themes', t => {
   assert.equal(
     fs.existsSync(
       path.join(root, 'public', 'static', 'multisrc', 'madara', 'en-one'),
+    ),
+    false,
+  );
+  assert.equal(
+    fs.existsSync(
+      path.join(root, 'public', 'static', 'multisrc', 'madara', 'worldnovel'),
     ),
     false,
   );

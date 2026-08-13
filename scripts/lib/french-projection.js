@@ -1,7 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const isFrenchSource = source => source?.options?.lang === 'French';
+export const EXCLUDED_FRENCH_SOURCE_IDS = new Set([
+  'massnovel',
+  'mtlnovel-fr',
+  'worldnovel',
+]);
+
+export const isFrenchSource = source =>
+  source?.options?.lang === 'French' &&
+  !EXCLUDED_FRENCH_SOURCE_IDS.has(source.id?.toLowerCase());
 
 export const filterFrenchSources = sources => sources.filter(isFrenchSource);
 
@@ -9,7 +17,10 @@ function removeChildDirectoriesExcept(parent, keep) {
   if (!fs.existsSync(parent)) return;
   for (const entry of fs.readdirSync(parent, { withFileTypes: true })) {
     if (entry.isDirectory() && !keep.has(entry.name)) {
-      fs.rmSync(path.join(parent, entry.name), { recursive: true, force: true });
+      fs.rmSync(path.join(parent, entry.name), {
+        recursive: true,
+        force: true,
+      });
     }
   }
 }
@@ -38,7 +49,9 @@ export function pruneRepository(root) {
 
     const filtersRoot = path.join(themeRoot, 'filters');
     if (fs.existsSync(filtersRoot)) {
-      for (const filter of fs.readdirSync(filtersRoot, { withFileTypes: true })) {
+      for (const filter of fs.readdirSync(filtersRoot, {
+        withFileTypes: true,
+      })) {
         const id = path.parse(filter.name).name.toLowerCase();
         if (filter.isFile() && !sourceIds.has(id)) {
           fs.rmSync(path.join(filtersRoot, filter.name), { force: true });
@@ -53,7 +66,10 @@ export function pruneRepository(root) {
   );
 
   const multisrcAssets = path.join(root, 'public', 'static', 'multisrc');
-  removeChildDirectoriesExcept(multisrcAssets, new Set(keptSourcesByTheme.keys()));
+  removeChildDirectoriesExcept(
+    multisrcAssets,
+    new Set(keptSourcesByTheme.keys()),
+  );
   for (const [theme, sourceIds] of keptSourcesByTheme) {
     removeChildDirectoriesExcept(path.join(multisrcAssets, theme), sourceIds);
   }
