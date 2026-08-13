@@ -176,3 +176,38 @@ test('Trad-Index keeps search results when one prose catalogue is unavailable', 
     ['dungeon-hunter'],
   );
 });
+
+test('Trad-Index rejects search when both prose catalogues are unavailable', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/tradindex.ts',
+    () => Promise.reject(new Error('Temporary catalogue failure')),
+  );
+  t.after(restore);
+
+  await assert.rejects(plugin.searchNovels('Dungeon', 1), /catalogue/i);
+});
+
+test('Trad-Index retries an unavailable chapter page before returning all chapters', async t => {
+  let unavailableResponses = 1;
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/tradindex.ts',
+    url => {
+      const parsed = new URL(url);
+      const key = parsed.pathname + parsed.search;
+      if (
+        key === '/oeuvre/dungeon-hunter?onglet=chapitres&tri=desc&page=2' &&
+        unavailableResponses-- > 0
+      )
+        return Promise.resolve(new Response('Unavailable', { status: 503 }));
+      return fixtureFetch(url);
+    },
+  );
+  t.after(restore);
+
+  assert.deepEqual(
+    (await plugin.parseNovel('dungeon-hunter')).chapters.map(
+      chapter => chapter.chapterNumber,
+    ),
+    [1, 2, 3],
+  );
+});

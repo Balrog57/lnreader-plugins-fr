@@ -29,10 +29,30 @@ class TradIndexPlugin implements Plugin.PluginBase {
     return new URL(`/oeuvre/${slug}/chapitre/${chapterNumber}`, this.site).href;
   }
 
-  private async fetchHtml(path: string): Promise<string> {
-    const response = await fetchApi(new URL(path, this.site).href);
-    if (!response.ok) throw new Error(`Failed to load ${path}`);
-    return response.text();
+  private async fetchHtml(path: string, retry = false): Promise<string> {
+    const attempts = retry ? 4 : 1;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const response = await fetchApi(new URL(path, this.site).href);
+      if (response.ok) return response.text();
+      if (
+        !retry ||
+        (response.status !== 429 && response.status < 500) ||
+        attempt === attempts - 1
+      )
+        throw new Error(`Failed to load ${path}`);
+    }
+    throw new Error(`Failed to load ${path}`);
+  }
+
+  private async catalogueSections(paths: string[]): Promise<string[]> {
+    const results = await Promise.allSettled(
+      paths.map(path => this.fetchHtml(path)),
+    );
+    const pages = results.flatMap(result =>
+      result.status === 'fulfilled' ? [result.value] : [],
+    );
+    if (!pages.length) throw new Error('Failed to load catalogue');
+    return pages;
   }
 
   private parseCards(html: string): Plugin.NovelItem[] {
@@ -105,6 +125,7 @@ class TradIndexPlugin implements Plugin.PluginBase {
       Array.from({ length: lastPage - 1 }, (_, index) =>
         this.fetchHtml(
           `/oeuvre/${slug}?onglet=chapitres&tri=desc&page=${index + 2}`,
+          true,
         ),
       ),
     );
@@ -124,10 +145,8 @@ class TradIndexPlugin implements Plugin.PluginBase {
     _options: Plugin.PopularNovelsOptions<undefined>,
   ): Promise<Plugin.NovelItem[]> {
     const sitePage = Math.max(1, pageNo);
-    const pages = await Promise.all(
-      catalogueTypes.map(type =>
-        this.fetchHtml(this.cataloguePath(type, sitePage)).catch(() => ''),
-      ),
+    const pages = await this.catalogueSections(
+      catalogueTypes.map(type => this.cataloguePath(type, sitePage)),
     );
     return [
       ...new Map(
@@ -143,12 +162,8 @@ class TradIndexPlugin implements Plugin.PluginBase {
     searchTerm: string,
     pageNo: number,
   ): Promise<Plugin.NovelItem[]> {
-    const pages = await Promise.all(
-      catalogueTypes.map(type =>
-        this.fetchHtml(this.cataloguePath(type, pageNo, searchTerm)).catch(
-          () => '',
-        ),
-      ),
+    const pages = await this.catalogueSections(
+      catalogueTypes.map(type => this.cataloguePath(type, pageNo, searchTerm)),
     );
     return [
       ...new Map(
