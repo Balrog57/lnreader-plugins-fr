@@ -1,60 +1,67 @@
-# LNReader Plugins
+# Plugins français pour LNReader
 
-<p>
-<img alt="Total number of available plugins" src="https://raw.githubusercontent.com/LNReader/lnreader-plugins/plugins/v3.0.0/total.svg">
-<img alt="Open plugin requests" src="https://img.shields.io/github/issues/lnreader/lnreader-plugins/Plugin%20Request?color=success&label=plugin%20requests">
-<img alt="Open bug reports" src="https://img.shields.io/github/issues/lnreader/lnreader-plugins/Bug?color=red&label=bugs">
-</p>
+Ce dépôt publie un catalogue communautaire contenant uniquement les plugins
+français compatibles avec [LNReader](https://github.com/LNReader/lnreader).
+Il est indépendant du dépôt officiel afin que les corrections françaises
+puissent être mises à disposition sans attendre leur fusion upstream.
 
-Community-driven plugin repository for [LNReader](https://github.com/LNReader/lnreader). This repository hosts plugins and manages related issues and requests.
+## Ajouter le dépôt dans LNReader
 
-## Quick Start
+Dans les paramètres des dépôts de plugins, ajoutez cette adresse :
 
-**Prerequisites:** Node.js >= 22
+```text
+https://raw.githubusercontent.com/Balrog57/lnreader-plugins-fr/plugins/v3.0.0/.dist/plugins.min.json
+```
+
+Les plugins marqués comme cassés dans les sources ne sont pas publiés.
+
+## Synchronisation automatique
+
+Chaque jour, GitHub Actions récupère les nouveautés de
+`LNReader/lnreader-plugins`. La projection conserve uniquement :
+
+- les plugins du dossier `plugins/french` ;
+- les sources françaises des générateurs multi-sources ;
+- les moteurs, types, scripts et ressources nécessaires à leur compilation.
+
+Les corrections locales sont fusionnées avec les changements upstream. Une
+modification simultanée et incompatible de la même source française arrête la
+synchronisation au lieu d'écraser silencieusement la correction locale.
+
+La branche `master` n'est mise à jour que si les tests unitaires, la
+compilation, le manifeste uniquement français, le lint et les contrôles réels
+des sites ne signalent aucun échec bloquant. Une panne de test ou un conflit ne
+modifie ni `master` ni le catalogue déjà publié.
+
+## Vérification locale
+
+Prérequis : Node.js 24 ou version ultérieure.
 
 ```bash
-npm install
-npm run dev:start
+npm ci --ignore-scripts
+npm run prune:french
+npm run test:unit
+npm run clean:multisrc
+npm run lint:french
+npm run build:full
+npm run check:french-manifest
+npm run check:french-live
 ```
 
-## Documentation
-
-- **[Quick Start Guide](./docs/quickstart.md)** - Create your first plugin
-- **[Plugin Development](./docs/docs.md)** - Complete API reference
-- **[Testing Guide](./docs/website-tutorial.md)** - Test plugins using the web interface
-- **[Live Check](./docs/testing.md)** - Required `npm run check:plugin` check before opening a PR
-- **[Komga Plugin](./docs/komga-plugin.md)** - Self-hosted server integration
-
-## Testing Methods
-
-### Web Interface
+Pour contrôler un seul plugin :
 
 ```bash
-npm run dev:start
+npm run check:plugin -- plugins/french/nom-du-plugin.ts
 ```
 
-Open [localhost:3000](http://localhost:3000) to test plugins interactively. See the [testing guide](./docs/website-tutorial.md) for details.
+## Publication
 
-### Mobile App
+Après validation d'une modification de `master`, le workflow de publication
+reconstruit le catalogue et force la mise à jour de la branche de distribution
+`plugins/v3.0.0`. Le jeton GitHub propre au dépôt est utilisé ; aucun jeton
+personnel n'est requis.
 
-**From GitHub (Automated):**
+## Avertissement
 
-Push your changes to the `master` branch. The [GitHub Action](./.github/workflows/publish-plugins.yml) automatically builds and publishes plugins to the `plugins` branch.
-
-Add your repository URL to the app:
-
-```
-https://raw.githubusercontent.com/<username>/<repo>/plugins/<tag>/.dist/plugins.min.json
-```
-
-**From Localhost:**
-
-```bash
-npm run serve:dev
-```
-
-Add `http://10.0.2.2/.dist/plugins.min.json` (Android emulator) to the app. Requires `.env` configuration (see `.env.template`).
-
-## Disclaimer
-
-The developers are not affiliated with any content providers. If you are a non-aggregator website owner, you may request plugin removal via [Discord](https://discord.gg/QdcWN4MD63) or by [creating an issue](https://github.com/LNReader/lnreader-plugins/issues/new). Removed sites are added to the [blacklist](BLACKLIST.json).
+Ce projet n'est affilié ni à LNReader ni aux sites référencés. Les contenus
+restent soumis aux conditions de leurs éditeurs respectifs.

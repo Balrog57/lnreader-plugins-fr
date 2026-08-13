@@ -1,7 +1,7 @@
 {
-  "name": "lnreader-plugins",
+  "name": "lnreader-plugins-fr",
   "version": "3.0.0",
-  "description": "Plugins repo for LNReader",
+  "description": "Dépôt communautaire de plugins français pour LNReader",
   "main": "index.js",
   "type": "module",
   "scripts": {
