@@ -7,22 +7,23 @@ const prose = `Premier paragraphe. ${'Texte public lisible. '.repeat(12)}`;
 const moreProse = `Second paragraphe. ${'Suite du chapitre public. '.repeat(12)}`;
 const fixtures = {
   '/catalogue?type=Web+Novel&page=1': `
-    <a href="/oeuvre/roman-web"><img src="/roman.webp">Roman Web</a>
-    <a href="/oeuvre/dungeon-hunter">Dungeon Hunter</a>
+    <a href="/oeuvre/roman-web"><img src="/roman.webp"><span class="font-mono">12 ch.</span><span class="line-clamp-3 font-display">Roman Web</span><span class="truncate font-mono">Wuxia France</span></a>
+    <a href="/oeuvre/scan-interdit"><img src="/scan.webp"><span class="font-mono">8 ch.</span><span class="line-clamp-3 font-display">Scan interdit</span><span class="truncate font-mono">Manhwa</span></a>
+    <a href="/oeuvre/dungeon-hunter"><span class="font-mono">35 ch.</span><span class="line-clamp-3 font-display">Dungeon Hunter</span><span class="truncate font-mono">Slimegate</span></a>
   `,
   '/catalogue?type=Light+Novel&page=1': `
-    <a href="/oeuvre/dungeon-hunter"><img src="/dungeon.webp">Dungeon Hunter</a>
+    <a href="/oeuvre/dungeon-hunter"><img src="/dungeon.webp"><span class="font-mono">35 ch.</span><span class="line-clamp-3 font-display">Dungeon Hunter</span><span class="truncate font-mono">Slimegate</span></a>
   `,
   '/catalogue?type=Web+Novel&q=Dungeon&page=1': `
-    <a href="/oeuvre/dungeon-hunter"><img src="/dungeon.webp">Dungeon Hunter</a>
+    <a href="/oeuvre/dungeon-hunter"><img src="/dungeon.webp"><span class="font-mono">35 ch.</span><span class="line-clamp-3 font-display">Dungeon Hunter</span><span class="truncate font-mono">Slimegate</span></a>
   `,
   '/catalogue?type=Light+Novel&q=Dungeon&page=1': `
-    <a href="/oeuvre/dungeon-hunter"><img src="/dungeon.webp">Dungeon Hunter</a>
+    <a href="/oeuvre/dungeon-hunter"><img src="/dungeon.webp"><span class="font-mono">35 ch.</span><span class="line-clamp-3 font-display">Dungeon Hunter</span><span class="truncate font-mono">Slimegate</span></a>
   `,
   '/oeuvre/dungeon-hunter': `
     <h1>Dungeon Hunter</h1>
     <img alt="Couverture de Dungeon Hunter" src="/cover.webp">
-    <div>Light Novel Â· En cours</div>
+    <div>Light Novel · En cours</div>
     <h2>Synopsis</h2><p>Synopsis public.</p>
     <div>Auteur : Auteur public</div><div>Traducteur : Traducteur public</div>
     <div>Genres : Action, Fantaisie</div>
@@ -36,8 +37,10 @@ const fixtures = {
   `,
   '/oeuvre/dungeon-hunter/chapitre/1': `
     <main>
-      <h1>Chapitre 1</h1><div>Publié le 1 janvier</div>
-      <p>${prose}</p><p>${moreProse}</p>
+      <div><p class="text-xs text-warm-gray truncate">Dungeon Hunter</p><p class="text-sm font-medium text-warm-white truncate">Chapitre 1 — Le départ</p></div>
+      <h1>Chapitre 1 — Le départ</h1>
+      <p class="text-xs text-warm-gray">Publié le 1 janvier</p>
+      <p class="narration">${prose}</p><p class="dialogue">${moreProse}</p>
       <p>Traduit par L'équipe publique</p>
       <h2>Commentaires</h2><form><textarea>Publier</textarea></form>
     </main>
@@ -74,6 +77,10 @@ test('Trad-Index lists only prose sources and searches the two novel catalogues'
     requests.some(path => /Manhwa|scan/i.test(path)),
     false,
   );
+  assert.equal(
+    popular.some(novel => novel.path === 'scan-interdit'),
+    false,
+  );
 
   const search = await plugin.searchNovels('Dungeon', 1);
   assert.deepEqual(
@@ -103,6 +110,10 @@ test('Trad-Index loads paginated chapters and strips comments from prose', async
 
   const chapter = await plugin.parseChapter('dungeon-hunter/1');
   assert.match(chapter, /Premier paragraphe/);
+  assert.doesNotMatch(
+    chapter,
+    /Dungeon Hunter|Chapitre 1 — Le départ|Publié le/,
+  );
   assert.doesNotMatch(chapter, /Commentaires|Publier/);
   assert.equal(
     plugin.resolveUrl('dungeon-hunter', true),

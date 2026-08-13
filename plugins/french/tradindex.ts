@@ -38,8 +38,20 @@ class TradIndexPlugin implements Plugin.PluginBase {
       const match = href.match(/^\/oeuvre\/([^/?#]+)\/?$/);
       if (!match) return;
 
-      const name = $(element).text().trim();
-      if (!name) return;
+      const name = $(element)
+        .find('[class*="line-clamp"]')
+        .first()
+        .text()
+        .trim();
+      const sourceType = $(element)
+        .find('span')
+        .toArray()
+        .map(span => $(span).text().trim())
+        .find(text =>
+          /^(?:(?:Web|Light) Novel|Manhwa|Manga|Scan)$/i.test(text),
+        );
+      if (!name || (sourceType && !/^(?:Web|Light) Novel$/i.test(sourceType)))
+        return;
       const cover = $(element).find('img').first().attr('src');
       novels.set(match[1], {
         name,
@@ -150,7 +162,7 @@ class TradIndexPlugin implements Plugin.PluginBase {
     const $ = load(html);
     const details = $('body').text().replace(/\s+/g, ' ');
     const formatStatus = details.match(
-      /(Web Novel|Light Novel)\s*(?:·|Â·)\s*([^\n]+)/i,
+      /(Web Novel|Light Novel)\s*·\s*([^\n]+)/i,
     );
     const getDetail = (label: string) => {
       let value: string | undefined;
@@ -213,7 +225,10 @@ class TradIndexPlugin implements Plugin.PluginBase {
           stopped = true;
           return false;
         }
-        if (element.tagName === 'p' && part.text().trim())
+        if (
+          element.tagName === 'p' &&
+          (part.hasClass('narration') || part.hasClass('dialogue'))
+        )
           prose.push($.html(element));
       });
 
