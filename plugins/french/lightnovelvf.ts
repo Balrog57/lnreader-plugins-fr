@@ -25,7 +25,12 @@ class LightNovelVFPlugin implements Plugin.PluginBase {
   version = '1.0.0';
 
   resolveUrl(path: string, _isNovel = false): string {
-    const cleanPath = path.replace(/^\/+|\/+$/g, '');
+    const url = new URL(path, this.site);
+    if (url.origin !== new URL(this.site).origin)
+      throw new Error('Cannot resolve a foreign origin');
+    const cleanPath = url.pathname
+      .replace(/^\/+|\/+$/g, '')
+      .replace(/^novel\//, '');
     return new URL(`/novel/${cleanPath}`, this.site).toString();
   }
 

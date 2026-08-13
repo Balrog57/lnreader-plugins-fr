@@ -15,7 +15,12 @@ class TradIndexPlugin implements Plugin.PluginBase {
   version = '1.0.0';
 
   resolveUrl(path: string, isNovel = false): string {
-    const cleanPath = path.replace(/^\/+|\/+$/g, '');
+    const url = new URL(path, this.site);
+    if (url.origin !== new URL(this.site).origin)
+      throw new Error('Cannot resolve a foreign origin');
+    const cleanPath = url.pathname
+      .replace(/^\/+|\/+$/g, '')
+      .replace(/^oeuvre\//, '');
     if (isNovel) return new URL(`/oeuvre/${cleanPath}`, this.site).href;
 
     const [slug, chapterNumber] = cleanPath

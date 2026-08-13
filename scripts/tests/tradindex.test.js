@@ -123,4 +123,18 @@ test('Trad-Index loads paginated chapters and strips comments from prose', async
     plugin.resolveUrl('dungeon-hunter/1'),
     'https://trad-index.com/oeuvre/dungeon-hunter/chapitre/1',
   );
+  assert.equal(
+    plugin.resolveUrl('/oeuvre/dungeon-hunter', true),
+    'https://trad-index.com/oeuvre/dungeon-hunter',
+  );
+  assert.equal(
+    plugin.resolveUrl(
+      'https://trad-index.com/oeuvre/dungeon-hunter/chapitre/1',
+    ),
+    'https://trad-index.com/oeuvre/dungeon-hunter/chapitre/1',
+  );
+  assert.throws(
+    () => plugin.resolveUrl('https://example.com/oeuvre/dungeon-hunter', true),
+    /foreign origin/,
+  );
 });

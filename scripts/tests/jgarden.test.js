@@ -18,7 +18,7 @@ const fixtures = {
       title: { rendered: 'Love Unseen' },
       content: {
         rendered:
-          '<img src="https://j-garden.fr/cover.webp"><p>Synopsis du roman.</p><a href="/love-unseen-t1-chapitre-1/">Chapitre 1</a>',
+          '<img src="https://j-garden.fr/cover.webp"><p>Synopsis du roman.</p><a href="/love-unseen-t2-chapitre-1/">Tome 2 - Chapitre 1</a><a href="https://j-garden.fr/love-unseen-t1-chapitre-2/">Tome 1 - Chapitre 2</a><a href="/love-unseen-t1-chapitre-1/">Tome 1 - Chapitre 1</a><a href="/love-unseen-t1-chapitre-2/">Tome 1 - Chapitre 2</a>',
       },
     },
   ],
@@ -62,7 +62,11 @@ test('J-Garden lists, searches, and parses its public WordPress catalogue', asyn
   assert.equal(novel.name, 'Love Unseen');
   assert.deepEqual(
     novel.chapters.map(chapter => chapter.path),
-    ['love-unseen-t1-chapitre-1'],
+    [
+      'love-unseen-t1-chapitre-1',
+      'love-unseen-t1-chapitre-2',
+      'love-unseen-t2-chapitre-1',
+    ],
   );
 
   const chapter = await plugin.parseChapter('love-unseen-t1-chapitre-1');

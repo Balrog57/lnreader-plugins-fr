@@ -165,4 +165,16 @@ test('LightNovelVF parses metadata, paginated JSON chapters, and readable conten
     plugin.resolveUrl('supreme-magus/114'),
     'https://www.lightnovelvf.com/novel/supreme-magus/114',
   );
+  assert.equal(
+    plugin.resolveUrl('/novel/supreme-magus', true),
+    'https://www.lightnovelvf.com/novel/supreme-magus',
+  );
+  assert.equal(
+    plugin.resolveUrl('https://www.lightnovelvf.com/novel/supreme-magus/114'),
+    'https://www.lightnovelvf.com/novel/supreme-magus/114',
+  );
+  assert.throws(
+    () => plugin.resolveUrl('https://example.com/novel/supreme-magus', true),
+    /foreign origin/,
+  );
 });

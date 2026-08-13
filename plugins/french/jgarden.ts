@@ -58,6 +58,19 @@ class JGardenPlugin implements Plugin.PluginBase {
       .join(' ');
   }
 
+  private chapterSequence(name: string, path: string) {
+    const source = `${name} ${path}`;
+    const chapter = source.match(
+      /(?:chapitre|chapter|ch\.?)[\s_-]*(\d+(?:[.,]\d+)?)/i,
+    );
+    if (!chapter) return undefined;
+    const volume = source.match(/(?:tome|volume|vol\.?|t)[\s_-]*(\d+)/i);
+    return {
+      volume: Number(volume?.[1] || 0),
+      chapter: Number(chapter[1].replace(',', '.')),
+    };
+  }
+
   async popularNovels(pageNo: number): Promise<Plugin.NovelItem[]> {
     if (pageNo > 1) return [];
     const [lightNovels, webNovels] = await Promise.all(
@@ -85,7 +98,10 @@ class JGardenPlugin implements Plugin.PluginBase {
     if (!page) throw new Error('Novel not found');
 
     const $ = load(page.content.rendered);
-    const chapters: Plugin.ChapterItem[] = [];
+    const chapters = new Map<
+      string,
+      { chapter: Plugin.ChapterItem; index: number }
+    >();
     const firstChapter = $('a[href]')
       .filter((_, element) => {
         const href = $(element).attr('href');
@@ -94,11 +110,13 @@ class JGardenPlugin implements Plugin.PluginBase {
       })
       .first();
 
-    $('a[href]').each((_, element) => {
+    $('a[href]').each((index, element) => {
       const href = $(element).attr('href');
       const path = href ? this.slugFromLink(href) : undefined;
       const name = $(element).text().trim();
-      if (path && name && chapterSlug.test(path)) chapters.push({ name, path });
+      if (path && name && chapterSlug.test(path) && !chapters.has(path)) {
+        chapters.set(path, { chapter: { name, path }, index });
+      }
     });
 
     return {
@@ -107,7 +125,24 @@ class JGardenPlugin implements Plugin.PluginBase {
       cover: $('img').first().attr('src') || defaultCover,
       summary: firstChapter.prevAll().text().trim(),
       status: NovelStatus.Ongoing,
-      chapters,
+      chapters: Array.from(chapters.values())
+        .sort((left, right) => {
+          const leftSequence = this.chapterSequence(
+            left.chapter.name,
+            left.chapter.path,
+          );
+          const rightSequence = this.chapterSequence(
+            right.chapter.name,
+            right.chapter.path,
+          );
+          if (!leftSequence || !rightSequence) return left.index - right.index;
+          return (
+            leftSequence.volume - rightSequence.volume ||
+            leftSequence.chapter - rightSequence.chapter ||
+            left.index - right.index
+          );
+        })
+        .map(({ chapter }) => chapter),
     };
   }
 
