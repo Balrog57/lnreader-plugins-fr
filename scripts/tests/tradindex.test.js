@@ -72,12 +72,17 @@ test('Trad-Index lists only prose sources and searches the two novel catalogues'
   );
   t.after(restore);
 
-  assert.equal(plugin.version, '1.0.3');
+  assert.equal(plugin.version, '1.0.4');
 
   const popular = await plugin.popularNovels(1, {});
   assert.deepEqual(
     popular.map(novel => novel.name),
-    ['Roman Web', 'Dungeon Hunter', 'Second Web'],
+    ['Roman Web', 'Dungeon Hunter'],
+  );
+  assert.equal(requests.includes('/catalogue?type=Web+Novel&page=2'), false);
+  assert.deepEqual(
+    (await plugin.popularNovels(2, {})).map(novel => novel.name),
+    ['Second Web'],
   );
   assert.equal(
     requests.some(path => /Manhwa|scan/i.test(path)),
@@ -153,5 +158,21 @@ test('Trad-Index loads paginated chapters and strips comments from prose', async
   assert.throws(
     () => plugin.resolveUrl('https://example.com/oeuvre/dungeon-hunter', true),
     /foreign origin/,
+  );
+});
+
+test('Trad-Index keeps search results when one prose catalogue is unavailable', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/tradindex.ts',
+    url =>
+      url.includes('type=Light+Novel&q=')
+        ? Promise.reject(new Error('Temporary catalogue failure'))
+        : fixtureFetch(url),
+  );
+  t.after(restore);
+
+  assert.deepEqual(
+    (await plugin.searchNovels('Dungeon', 1)).map(novel => novel.path),
+    ['dungeon-hunter'],
   );
 });

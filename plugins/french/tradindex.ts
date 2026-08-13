@@ -12,7 +12,7 @@ class TradIndexPlugin implements Plugin.PluginBase {
   name = 'Trad-Index';
   icon = 'src/fr/tradindex/icon.png';
   site = 'https://trad-index.com/';
-  version = '1.0.3';
+  version = '1.0.4';
 
   resolveUrl(path: string, isNovel = false): string {
     const url = new URL(path, this.site);
@@ -64,27 +64,6 @@ class TradIndexPlugin implements Plugin.PluginBase {
   private cataloguePath(type: string, pageNo: number, searchTerm?: string) {
     const query = searchTerm ? `&q=${encodeURIComponent(searchTerm)}` : '';
     return `/catalogue?type=${type}${query}&page=${pageNo}`;
-  }
-
-  private async fetchCataloguePages(type: string): Promise<string[]> {
-    const first = await this.fetchHtml(this.cataloguePath(type, 1));
-    const $ = load(first);
-    let lastPage = 1;
-    $('a[href*="page="]').each((_, element) => {
-      const href = $(element).attr('href');
-      if (!href) return;
-      const page = Number(new URL(href, this.site).searchParams.get('page'));
-      if (Number.isInteger(page)) lastPage = Math.max(lastPage, page);
-    });
-    const pages = [first];
-    for (let page = 2; page <= lastPage; page++) {
-      try {
-        pages.push(await this.fetchHtml(this.cataloguePath(type, page)));
-      } catch {
-        break;
-      }
-    }
-    return pages;
   }
 
   private chapterItems(html: string, slug: string): Plugin.ChapterItem[] {
@@ -144,10 +123,10 @@ class TradIndexPlugin implements Plugin.PluginBase {
     pageNo: number,
     _options: Plugin.PopularNovelsOptions<undefined>,
   ): Promise<Plugin.NovelItem[]> {
-    if (pageNo > 1) return [];
+    const sitePage = Math.max(1, pageNo);
     const pages = await Promise.all(
       catalogueTypes.map(type =>
-        this.fetchCataloguePages(type).catch(() => []),
+        this.fetchHtml(this.cataloguePath(type, sitePage)).catch(() => ''),
       ),
     );
     return [
@@ -166,7 +145,9 @@ class TradIndexPlugin implements Plugin.PluginBase {
   ): Promise<Plugin.NovelItem[]> {
     const pages = await Promise.all(
       catalogueTypes.map(type =>
-        this.fetchHtml(this.cataloguePath(type, pageNo, searchTerm)),
+        this.fetchHtml(this.cataloguePath(type, pageNo, searchTerm)).catch(
+          () => '',
+        ),
       ),
     );
     return [
