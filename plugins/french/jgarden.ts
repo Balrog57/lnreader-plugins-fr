@@ -62,7 +62,7 @@ class JGardenPlugin implements Plugin.PluginBase {
     if (pageNo > 1) return [];
     const [lightNovels, webNovels] = await Promise.all(
       ['jg-ln', 'jg-web-novel'].map(section =>
-        this.getJson<Array<Pick<WordPressPage, 'content'>>>(
+        this.getJson<Pick<WordPressPage, 'content'>[]>(
           `/wp-json/wp/v2/pages?slug=${section}&_fields=content`,
         ),
       ),
@@ -114,7 +114,7 @@ class JGardenPlugin implements Plugin.PluginBase {
   async parseChapter(chapterPath: string): Promise<string> {
     const slug = this.slugFromLink(chapterPath) || chapterPath;
     let posts = await this.getJson<
-      Array<Pick<WordPressPage, 'content' | 'title' | 'link'>>
+      Pick<WordPressPage, 'content' | 'title' | 'link'>[]
     >(
       `/wp-json/wp/v2/posts?slug=${encodeURIComponent(slug)}&_fields=content,title,link`,
     );

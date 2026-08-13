@@ -5,13 +5,13 @@ import { NovelStatus } from '@libs/novelStatus';
 import { Plugin } from '@/types/plugin';
 
 type ChapterPage = {
-  chapters: Array<{
+  chapters: {
     number: string;
     slug: string;
     name_fr?: string | null;
     name?: string | null;
     created_at?: string | null;
-  }>;
+  }[];
   current_page: number;
   last_page: number;
   total: number;
