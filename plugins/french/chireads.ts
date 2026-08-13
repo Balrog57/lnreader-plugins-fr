@@ -16,7 +16,9 @@ class ChireadsPlugin implements Plugin.PluginBase {
   name = 'Chireads';
   icon = 'src/fr/chireads/icon.png';
   site = 'https://chireads.com';
-  version = '2.0.2';
+  version = '2.0.3';
+
+  private static readonly CHAPTER_PAGE_SIZE = 100;
 
   async getCheerio(url: string): Promise<CheerioAPI> {
     const r = await fetchApi(url, {
@@ -129,6 +131,31 @@ class ChireadsPlugin implements Plugin.PluginBase {
       }
     });
 
+    const chapters = this.parseChapterItems($);
+    const totalPages = Math.max(
+      1,
+      Math.ceil(chapters.length / ChireadsPlugin.CHAPTER_PAGE_SIZE),
+    );
+    novel.chapters = chapters.slice(0, ChireadsPlugin.CHAPTER_PAGE_SIZE);
+    if (totalPages > 1) {
+      (novel as Plugin.SourceNovel & { totalPages: number }).totalPages =
+        totalPages;
+    }
+
+    return novel;
+  }
+
+  async parsePage(novelPath: string, page: string): Promise<Plugin.SourcePage> {
+    const $ = await this.getCheerio(this.site + novelPath);
+    const pageNumber = Math.max(1, Number.parseInt(page, 10) || 1);
+    const chapters = this.parseChapterItems($);
+    const start = (pageNumber - 1) * ChireadsPlugin.CHAPTER_PAGE_SIZE;
+    return {
+      chapters: chapters.slice(start, start + ChireadsPlugin.CHAPTER_PAGE_SIZE),
+    };
+  }
+
+  private parseChapterItems($: CheerioAPI): Plugin.ChapterItem[] {
     const chapters: Plugin.ChapterItem[] = [];
     $('.refresh-detail-chapter-list a').each((i, el) => {
       const chapterUrl = $(el).attr('href');
@@ -144,10 +171,7 @@ class ChireadsPlugin implements Plugin.PluginBase {
         path: this.toPath(chapterUrl),
       });
     });
-
-    novel.chapters = chapters;
-
-    return novel;
+    return chapters;
   }
 
   async parseChapter(chapterUrl: string): Promise<string> {

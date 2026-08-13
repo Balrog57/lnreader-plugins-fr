@@ -69,7 +69,39 @@ test('Chireads finds Panlong through translated novel categories', async t => {
       },
     ],
   );
-  assert.equal(plugin.version, '2.0.2');
+  assert.equal(plugin.version, '2.0.3');
+});
+
+test('Chireads paginates large chapter lists', async t => {
+  const largePath = '/category/translatedtales/large-series/';
+  const links = Array.from(
+    { length: 205 },
+    (_, i) =>
+      `<li><a href="https://chireads.com/translatedtales/large-series/chapitre-${i + 1}/2026/01/01/">Chapitre ${i + 1}</a></li>`,
+  ).join('');
+  const largeFixtures = {
+    ...fixtures,
+    [largePath]: `<h1 class="refresh-detail-title">Large series</h1><ul class="refresh-detail-chapter-list">${links}</ul>`,
+  };
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/chireads.ts',
+    url => {
+      const parsed = new URL(url);
+      const key = parsed.pathname + parsed.search;
+      const body = largeFixtures[key];
+      return Promise.resolve(
+        new Response(body ?? 'Not found', { status: body ? 200 : 404 }),
+      );
+    },
+  );
+  t.after(restore);
+
+  const firstPage = await plugin.parseNovel(largePath);
+  assert.equal(firstPage.totalPages, 3);
+  assert.equal(firstPage.chapters.length, 100);
+  const secondPage = await plugin.parsePage(largePath, '2');
+  assert.equal(secondPage.chapters.length, 100);
+  assert.equal(secondPage.chapters[0].name, 'Chapitre 101');
 });
 
 test('Chireads search also finds original novels', async t => {
