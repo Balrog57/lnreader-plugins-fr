@@ -26,6 +26,7 @@
     "check:plugin": "node scripts/live-check-plugin.js",
     "prune:french": "node scripts/prune-to-french.js",
     "check:french-manifest": "node scripts/assert-french-manifest.js",
+    "check:french-live": "node scripts/check-french-plugins.js",
     "test:manifest": "node --test scripts/tests/assert-french-manifest.test.js",
     "test:projection": "node --test scripts/tests/french-projection.test.js",
     "prepare": "husky"

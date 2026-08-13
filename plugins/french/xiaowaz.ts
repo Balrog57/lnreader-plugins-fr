@@ -229,15 +229,20 @@ class XiaowazPlugin implements Plugin.PluginBase {
   async parseChapter(chapterPath: string): Promise<string> {
     const $ = await this.getCheerio(this.site + chapterPath);
 
-    const startTag = $('.wp-post-navigation');
-    const endTag = $('.abh_box.abh_box_down.abh_box_business');
+    const startTag = $('.entry-content .wp-post-navigation').first();
 
     const elementsBetweenTags: string[] = [];
     let footnotesElement: string | null = null;
 
-    if (startTag.length > 0 && endTag.length > 0) {
+    if (startTag.length > 0) {
       let currentElement = startTag.next();
-      while (currentElement.length > 0 && !currentElement.is(endTag)) {
+      while (currentElement.length > 0) {
+        if (
+          currentElement.hasClass('wp-post-navigation') ||
+          currentElement.is('.abh_box.abh_box_down.abh_box_business')
+        ) {
+          break;
+        }
         if (
           currentElement.find('p > a[href="https://ko-fi.com/wazouille"]')
             .length > 0
