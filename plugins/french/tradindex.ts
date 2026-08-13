@@ -12,7 +12,7 @@ class TradIndexPlugin implements Plugin.PluginBase {
   name = 'Trad-Index';
   icon = 'src/fr/tradindex/icon.png';
   site = 'https://trad-index.com/';
-  version = '1.0.0';
+  version = '1.0.1';
 
   resolveUrl(path: string, isNovel = false): string {
     const url = new URL(path, this.site);

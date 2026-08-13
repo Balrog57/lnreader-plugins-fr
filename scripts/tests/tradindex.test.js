@@ -68,6 +68,8 @@ test('Trad-Index lists only prose sources and searches the two novel catalogues'
   );
   t.after(restore);
 
+  assert.equal(plugin.version, '1.0.1');
+
   const popular = await plugin.popularNovels(1, {});
   assert.deepEqual(
     popular.map(novel => novel.name),
