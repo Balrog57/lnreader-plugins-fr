@@ -6,12 +6,17 @@ import { defaultCover } from '@libs/defaultCover';
 import { NovelStatus } from '@libs/novelStatus';
 import dayjs from 'dayjs';
 
+type WordPressCategory = {
+  name: string;
+  link: string;
+};
+
 class ChireadsPlugin implements Plugin.PluginBase {
   id = 'chireads';
   name = 'Chireads';
   icon = 'src/fr/chireads/icon.png';
   site = 'https://chireads.com';
-  version = '2.0.0';
+  version = '2.0.1';
 
   async getCheerio(url: string): Promise<CheerioAPI> {
     const r = await fetchApi(url, {
@@ -29,7 +34,9 @@ class ChireadsPlugin implements Plugin.PluginBase {
 
   private toPath(url?: string): string {
     if (!url) return '';
-    return url.replace(this.site, '');
+    const parsed = new URL(url, this.site);
+    if (!/(?:^|\.)chireads\.com$/i.test(parsed.hostname)) return '';
+    return `${parsed.pathname}${parsed.search}`;
   }
 
   private parseCards($: CheerioAPI): Plugin.NovelItem[] {
@@ -43,24 +50,6 @@ class ChireadsPlugin implements Plugin.PluginBase {
         name: $(el).find('.refresh-card-title a').text().trim(),
         cover:
           $(el).find('.refresh-card-cover img').attr('src') || defaultCover,
-        path: this.toPath(novelUrl),
-      });
-    });
-    return novels;
-  }
-
-  private parseSearchResults($: CheerioAPI): Plugin.NovelItem[] {
-    const novels: Plugin.NovelItem[] = [];
-    const seen = new Set<string>();
-    $('.news-list li').each((i, el) => {
-      const novelUrl =
-        $(el).find('.news-list-tit a').attr('href') ||
-        $(el).find('.news-list-img a').attr('href');
-      if (!novelUrl || seen.has(novelUrl)) return;
-      seen.add(novelUrl);
-      novels.push({
-        name: $(el).find('.news-list-tit a').text().trim(),
-        cover: $(el).find('.news-list-img img').attr('src') || defaultCover,
         path: this.toPath(novelUrl),
       });
     });
@@ -173,16 +162,18 @@ class ChireadsPlugin implements Plugin.PluginBase {
     searchTerm: string,
     pageNo: number,
   ): Promise<Plugin.NovelItem[]> {
-    if (pageNo !== 1) return [];
-
-    const $ = await this.getCheerio(
-      `${this.site}/?s=${encodeURIComponent(searchTerm)}`,
+    const response = await fetchApi(
+      `${this.site}/wp-json/wp/v2/categories?parent=2&search=${encodeURIComponent(searchTerm)}&per_page=100&page=${pageNo}`,
     );
-
-    const cards = this.parseCards($);
-    if (cards.length) return cards;
-
-    return this.parseSearchResults($);
+    if (!response.ok) return [];
+    const categories = (await response.json()) as WordPressCategory[];
+    return categories
+      .map(category => ({
+        name: category.name,
+        cover: defaultCover,
+        path: this.toPath(category.link),
+      }))
+      .filter(novel => novel.path.startsWith('/category/translatedtales/'));
   }
 
   filters = {
