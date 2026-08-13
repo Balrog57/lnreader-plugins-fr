@@ -40,10 +40,49 @@ class LightNovelVFPlugin implements Plugin.PluginBase {
     return response.text();
   }
 
+  private retryDelay(response: Response, attempt: number): number {
+    const retryAfter = response.headers.get('retry-after');
+    if (retryAfter) {
+      const seconds = Number(retryAfter);
+      if (Number.isFinite(seconds)) return Math.max(seconds, 0) * 1000;
+      const date = Date.parse(retryAfter);
+      if (!Number.isNaN(date)) return Math.max(date - Date.now(), 0);
+    }
+    return 1000 * 2 ** attempt;
+  }
+
+  private isChapterPage(value: unknown): value is ChapterPage {
+    if (!value || typeof value !== 'object') return false;
+    const page = value as Record<string, unknown>;
+    return (
+      Array.isArray(page.chapters) &&
+      typeof page.current_page === 'number' &&
+      Number.isFinite(page.current_page) &&
+      typeof page.last_page === 'number' &&
+      Number.isFinite(page.last_page) &&
+      typeof page.total === 'number' &&
+      Number.isFinite(page.total)
+    );
+  }
+
   private async fetchChapterPage(url: string): Promise<ChapterPage> {
-    const response = await fetchApi(url);
-    if (!response.ok) throw new Error(`Failed to load ${url}`);
-    return response.json() as Promise<ChapterPage>;
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const response = await fetchApi(url);
+      if (response.status === 429 && attempt < 5) {
+        await new Promise(resolve =>
+          setTimeout(resolve, this.retryDelay(response, attempt)),
+        );
+        continue;
+      }
+      if (!response.ok) throw new Error(`Failed to load ${url}`);
+      if (!response.headers.get('content-type')?.includes('application/json'))
+        throw new Error(`Expected JSON chapter page from ${url}`);
+      const page: unknown = await response.json();
+      if (!this.isChapterPage(page))
+        throw new Error(`Invalid chapter page from ${url}`);
+      return page;
+    }
+    throw new Error(`Failed to load ${url}`);
   }
 
   private parseCards(html: string): Plugin.NovelItem[] {
@@ -136,14 +175,14 @@ class LightNovelVFPlugin implements Plugin.PluginBase {
     const firstPage = await this.fetchChapterPage(
       `${this.resolveUrl(`${slug}/chapitres`, true)}?p=1&order=asc&q=`,
     );
-    const lastPage = Math.min(Math.max(firstPage.last_page, 1), 500);
+    let lastPage = Math.max(firstPage.current_page, firstPage.last_page, 1);
     const pages = [firstPage];
     for (let pageNo = 2; pageNo <= lastPage; pageNo += 1) {
-      pages.push(
-        await this.fetchChapterPage(
-          `${this.resolveUrl(`${slug}/chapitres`, true)}?p=${pageNo}&order=asc&q=`,
-        ),
+      const page = await this.fetchChapterPage(
+        `${this.resolveUrl(`${slug}/chapitres`, true)}?p=${pageNo}&order=asc&q=`,
       );
+      pages.push(page);
+      lastPage = Math.max(page.current_page, page.last_page, 1);
     }
     const chapters = new Map<string, Plugin.ChapterItem>();
     for (const page of pages) {

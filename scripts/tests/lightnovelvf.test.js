@@ -5,6 +5,7 @@ import { loadPluginForTest } from './helpers/load-plugin.js';
 
 const readableText = 'Texte du chapitre visible et lisible. '.repeat(12);
 const requests = [];
+let retryChapterPageRequests = 0;
 const fixtures = {
   '/novels-list?page=1': `
     <a href="/novel/supreme-magus"><img src="/covers/supreme-magus.webp"><span>Supreme Magus</span><span>114 chapitres</span><span>4.8</span></a>
@@ -23,6 +24,26 @@ const fixtures = {
     <p><a itemprop="author">Legion20</a><span>En cours</span></p>
     <p><a itemprop="genre">Action</a><a itemprop="genre">Fantaisie</a></p>
     <div id="lnv-novel" data-novel-slug="supreme-magus"></div>
+  `,
+  '/novel/retry-novel': `
+    <h1>Retry Novel</h1>
+    <div id="lnv-novel" data-novel-slug="retry-novel"></div>
+  `,
+  '/novel/retry-novel/chapitres?p=1&order=asc&q=': {
+    chapters: [{ number: '1', slug: '1', name: 'First', created_at: null }],
+    current_page: 1,
+    last_page: 2,
+    total: 2,
+  },
+  '/novel/retry-novel/chapitres?p=2&order=asc&q=': {
+    chapters: [{ number: '2', slug: '2', name: 'Second', created_at: null }],
+    current_page: 2,
+    last_page: 2,
+    total: 2,
+  },
+  '/novel/long-novel': `
+    <h1>Long Novel</h1>
+    <div id="lnv-novel" data-novel-slug="long-novel"></div>
   `,
   '/novel/supreme-magus/chapitres?p=1&order=asc&q=': {
     chapters: [
@@ -66,6 +87,34 @@ function fixtureFetch(url) {
   const parsed = new URL(url);
   const key = parsed.pathname + parsed.search;
   requests.push(key);
+  if (
+    key === '/novel/retry-novel/chapitres?p=2&order=asc&q=' &&
+    retryChapterPageRequests++ === 0
+  ) {
+    return Promise.resolve(
+      new Response(JSON.stringify({ message: 'Too many requests' }), {
+        status: 429,
+        headers: { 'content-type': 'application/json', 'retry-after': '0' },
+      }),
+    );
+  }
+  const longPage = key.match(
+    /^\/novel\/long-novel\/chapitres\?p=(\d+)&order=asc&q=$/,
+  );
+  if (longPage) {
+    const pageNo = Number(longPage[1]);
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          chapters: [],
+          current_page: pageNo,
+          last_page: 501,
+          total: 0,
+        }),
+        { headers: { 'content-type': 'application/json' } },
+      ),
+    );
+  }
   const body = fixtures[key];
   return Promise.resolve(
     new Response(
@@ -206,5 +255,31 @@ test('LightNovelVF parses metadata, paginated JSON chapters, and readable conten
   assert.throws(
     () => plugin.resolveUrl('https://example.com/novel/supreme-magus', true),
     /foreign origin/,
+  );
+});
+
+test('LightNovelVF retries a throttled chapter page', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/lightnovelvf.ts',
+    fixtureFetch,
+  );
+  t.after(restore);
+
+  assert.deepEqual(
+    (await plugin.parseNovel('retry-novel')).chapters.map(c => c.chapterNumber),
+    [1, 2],
+  );
+});
+
+test('LightNovelVF requests every server-declared chapter page', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/lightnovelvf.ts',
+    fixtureFetch,
+  );
+  t.after(restore);
+
+  await plugin.parseNovel('long-novel');
+  assert.ok(
+    requests.includes('/novel/long-novel/chapitres?p=501&order=asc&q='),
   );
 });
