@@ -8,7 +8,7 @@ const moreProse = `Second paragraphe. ${'Suite du chapitre public. '.repeat(12)}
 const fixtures = {
   '/catalogue?type=Web+Novel&page=1': `
     <a href="/oeuvre/roman-web"><img src="/roman.webp"><span class="font-mono">12 ch.</span><span class="line-clamp-3 font-display">Roman Web</span><span class="truncate font-mono">Wuxia France</span></a>
-    <a href="/oeuvre/scan-interdit"><img src="/scan.webp"><span class="font-mono">8 ch.</span><span class="line-clamp-3 font-display">Scan interdit</span><span class="truncate font-mono">Manhwa</span></a>
+    <a href="/oeuvre/scan-interdit" data-source-type="Manhwa"><img src="/scan.webp"><span class="font-mono">8 ch.</span><span class="line-clamp-3 font-display">Scan interdit</span><span class="truncate font-mono">Scan</span></a>
     <a href="/oeuvre/dungeon-hunter"><span class="font-mono">35 ch.</span><span class="line-clamp-3 font-display">Dungeon Hunter</span><span class="truncate font-mono">Slimegate</span></a>
   `,
   '/catalogue?type=Light+Novel&page=1': `

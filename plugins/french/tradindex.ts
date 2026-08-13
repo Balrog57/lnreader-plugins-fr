@@ -43,13 +43,7 @@ class TradIndexPlugin implements Plugin.PluginBase {
         .first()
         .text()
         .trim();
-      const sourceType = $(element)
-        .find('span')
-        .toArray()
-        .map(span => $(span).text().trim())
-        .find(text =>
-          /^(?:(?:Web|Light) Novel|Manhwa|Manga|Scan)$/i.test(text),
-        );
+      const sourceType = $(element).attr('data-source-type')?.trim();
       if (!name || (sourceType && !/^(?:Web|Light) Novel$/i.test(sourceType)))
         return;
       const cover = $(element).find('img').first().attr('src');
