@@ -72,7 +72,7 @@ test('Trad-Index lists only prose sources and searches the two novel catalogues'
   );
   t.after(restore);
 
-  assert.equal(plugin.version, '1.0.4');
+  assert.equal(plugin.version, '1.0.5');
 
   const popular = await plugin.popularNovels(1, {});
   assert.deepEqual(
@@ -198,7 +198,12 @@ test('Trad-Index retries an unavailable chapter page before returning all chapte
         key === '/oeuvre/dungeon-hunter?onglet=chapitres&tri=desc&page=2' &&
         unavailableResponses-- > 0
       )
-        return Promise.resolve(new Response('Unavailable', { status: 503 }));
+        return Promise.resolve(
+          new Response('Unavailable', {
+            status: 503,
+            headers: { 'retry-after': '0' },
+          }),
+        );
       return fixtureFetch(url);
     },
   );
@@ -220,7 +225,12 @@ test('Trad-Index retries an unavailable initial chapter-list page', async t => {
       const parsed = new URL(url);
       const key = parsed.pathname + parsed.search;
       if (key === '/oeuvre/dungeon-hunter' && unavailableResponses-- > 0)
-        return Promise.resolve(new Response('Unavailable', { status: 503 }));
+        return Promise.resolve(
+          new Response('Unavailable', {
+            status: 503,
+            headers: { 'retry-after': '0' },
+          }),
+        );
       return fixtureFetch(url);
     },
   );
@@ -232,4 +242,87 @@ test('Trad-Index retries an unavailable initial chapter-list page', async t => {
     ),
     [1, 2, 3],
   );
+});
+
+test('Trad-Index honors numeric and HTTP-date Retry-After values', async t => {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalNow = Date.now;
+  const now = Date.parse('2030-01-01T00:00:00Z');
+  const delays = [];
+  globalThis.setTimeout = (resolve, delay) => {
+    delays.push(delay);
+    resolve();
+    return 0;
+  };
+  Date.now = () => now;
+  t.after(() => {
+    globalThis.setTimeout = originalSetTimeout;
+    Date.now = originalNow;
+  });
+
+  for (const { retryAfter, expectedDelay } of [
+    { retryAfter: '2', expectedDelay: 2000 },
+    {
+      retryAfter: new Date(now + 3000).toUTCString(),
+      expectedDelay: 3000,
+    },
+  ]) {
+    let initialAttempts = 0;
+    const { plugin, restore } = await loadPluginForTest(
+      'plugins/french/tradindex.ts',
+      url => {
+        const key = new URL(url).pathname + new URL(url).search;
+        if (key === '/oeuvre/dungeon-hunter' && initialAttempts++ === 0) {
+          return Promise.resolve(
+            new Response('Unavailable', {
+              status: 503,
+              headers: { 'retry-after': retryAfter },
+            }),
+          );
+        }
+        return fixtureFetch(url);
+      },
+    );
+    try {
+      delays.length = 0;
+      assert.equal(
+        (await plugin.parseNovel('dungeon-hunter')).name,
+        'Dungeon Hunter',
+      );
+      assert.deepEqual(delays, [expectedDelay]);
+    } finally {
+      await restore();
+    }
+  }
+});
+
+test('Trad-Index exhausts bounded same-URL retries without a partial novel', async t => {
+  const originalSetTimeout = globalThis.setTimeout;
+  const delays = [];
+  globalThis.setTimeout = (resolve, delay) => {
+    delays.push(delay);
+    resolve();
+    return 0;
+  };
+  t.after(() => {
+    globalThis.setTimeout = originalSetTimeout;
+  });
+
+  const attemptedUrls = [];
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/tradindex.ts',
+    url => {
+      attemptedUrls.push(url);
+      return Promise.resolve(new Response('Unavailable', { status: 503 }));
+    },
+  );
+  t.after(restore);
+
+  await assert.rejects(plugin.parseNovel('dungeon-hunter'), /failed to load/i);
+  assert.equal(attemptedUrls.length, 4);
+  assert.deepEqual(
+    new Set(attemptedUrls),
+    new Set(['https://trad-index.com/oeuvre/dungeon-hunter']),
+  );
+  assert.deepEqual(delays, [100, 200, 300]);
 });

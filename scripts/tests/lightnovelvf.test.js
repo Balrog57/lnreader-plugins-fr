@@ -160,6 +160,40 @@ function fixtureFetch(url) {
   );
 }
 
+function chapterFixtureFetch(slug, chapterResponse) {
+  let chapterRequests = 0;
+  return {
+    fetch(url) {
+      const parsed = new URL(url);
+      const key = parsed.pathname + parsed.search;
+      if (key === `/novel/${slug}`) {
+        return Promise.resolve(
+          new Response(`<h1>${slug}</h1>`, {
+            headers: { 'content-type': 'text/html' },
+          }),
+        );
+      }
+      const match = key.match(
+        new RegExp(`^/novel/${slug}/chapitres\\?p=(\\d+)&order=asc&q=$`),
+      );
+      if (match) {
+        const response = chapterResponse(Number(match[1]), chapterRequests++);
+        return Promise.resolve(
+          response instanceof Response
+            ? response
+            : new Response(JSON.stringify(response), {
+                headers: { 'content-type': 'application/json' },
+              }),
+        );
+      }
+      return fixtureFetch(url);
+    },
+    get requests() {
+      return chapterRequests;
+    },
+  };
+}
+
 test('LightNovelVF builds catalogue and search routes and returns clean cards', async t => {
   const { plugin, restore } = await loadPluginForTest(
     'plugins/french/lightnovelvf.ts',
@@ -217,7 +251,7 @@ test('LightNovelVF parses metadata, paginated JSON chapters, and readable conten
   assert.equal(plugin.name, 'LightNovelVF');
   assert.equal(plugin.icon, 'src/fr/lightnovelvf/icon.png');
   assert.equal(plugin.site, 'https://www.lightnovelvf.com/');
-  assert.equal(plugin.version, '1.0.1');
+  assert.equal(plugin.version, '1.0.2');
 
   const novel = await plugin.parseNovel('supreme-magus');
   assert.equal(novel.name, 'Supreme Magus');
@@ -325,4 +359,92 @@ test('LightNovelVF requests every server-declared chapter page', async t => {
   assert.ok(
     requests.includes('/novel/long-novel/chapitres?p=501&order=asc&q='),
   );
+});
+
+test('LightNovelVF rejects a chapter response for the wrong requested page', async t => {
+  const source = chapterFixtureFetch('wrong-page', pageNo => ({
+    chapters: [
+      { number: String(pageNo), slug: String(pageNo), name: `Page ${pageNo}` },
+    ],
+    current_page: 2,
+    last_page: 2,
+    total: 2,
+  }));
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/lightnovelvf.ts',
+    source.fetch,
+  );
+  t.after(restore);
+
+  await assert.rejects(
+    plugin.parseNovel('wrong-page'),
+    /invalid chapter page/i,
+  );
+});
+
+test('LightNovelVF rejects non-integer pagination metadata', async t => {
+  const source = chapterFixtureFetch('invalid-pagination', () => ({
+    chapters: [],
+    current_page: 1,
+    last_page: 1.5,
+    total: 0,
+  }));
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/lightnovelvf.ts',
+    source.fetch,
+  );
+  t.after(restore);
+
+  await assert.rejects(
+    plugin.parseNovel('invalid-pagination'),
+    /invalid chapter page/i,
+  );
+});
+
+test('LightNovelVF rejects a malformed chapter entry', async t => {
+  const source = chapterFixtureFetch('malformed-entry', () => ({
+    chapters: [null],
+    current_page: 1,
+    last_page: 1,
+    total: 1,
+  }));
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/lightnovelvf.ts',
+    source.fetch,
+  );
+  t.after(restore);
+
+  await assert.rejects(
+    plugin.parseNovel('malformed-entry'),
+    /invalid chapter entry/i,
+  );
+});
+
+test('LightNovelVF accepts a past HTTP-date Retry-After without sleeping', async t => {
+  const source = chapterFixtureFetch('date-retry', (_pageNo, request) =>
+    request === 0
+      ? new Response('Unavailable', {
+          status: 503,
+          headers: { 'retry-after': 'Wed, 21 Oct 2015 07:28:00 GMT' },
+        })
+      : {
+          chapters: [{ number: '1', slug: '1', name: 'First' }],
+          current_page: 1,
+          last_page: 1,
+          total: 1,
+        },
+  );
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/lightnovelvf.ts',
+    source.fetch,
+  );
+  t.after(restore);
+
+  assert.deepEqual(
+    (await plugin.parseNovel('date-retry')).chapters.map(
+      chapter => chapter.chapterNumber,
+    ),
+    [1],
+  );
+  assert.equal(source.requests, 2);
 });

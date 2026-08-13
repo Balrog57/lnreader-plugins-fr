@@ -12,7 +12,7 @@ class TradIndexPlugin implements Plugin.PluginBase {
   name = 'Trad-Index';
   icon = 'src/fr/tradindex/icon.png';
   site = 'https://trad-index.com/';
-  version = '1.0.4';
+  version = '1.0.5';
 
   resolveUrl(path: string, isNovel = false): string {
     const url = new URL(path, this.site);
@@ -29,10 +29,22 @@ class TradIndexPlugin implements Plugin.PluginBase {
     return new URL(`/oeuvre/${slug}/chapitre/${chapterNumber}`, this.site).href;
   }
 
+  private retryDelay(response: Response, attempt: number): number {
+    const retryAfter = response.headers.get('retry-after');
+    if (retryAfter) {
+      const seconds = Number(retryAfter);
+      if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+      const date = Date.parse(retryAfter);
+      if (!Number.isNaN(date)) return Math.max(date - Date.now(), 0);
+    }
+    return 100 * (attempt + 1);
+  }
+
   private async fetchHtml(path: string, retry = false): Promise<string> {
     const attempts = retry ? 4 : 1;
+    const url = new URL(path, this.site).href;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
-      const response = await fetchApi(new URL(path, this.site).href);
+      const response = await fetchApi(url);
       if (response.ok) return response.text();
       if (
         !retry ||
@@ -40,6 +52,9 @@ class TradIndexPlugin implements Plugin.PluginBase {
         attempt === attempts - 1
       )
         throw new Error(`Failed to load ${path}`);
+      await new Promise(resolve =>
+        setTimeout(resolve, this.retryDelay(response, attempt)),
+      );
     }
     throw new Error(`Failed to load ${path}`);
   }
@@ -140,10 +155,7 @@ class TradIndexPlugin implements Plugin.PluginBase {
     );
   }
 
-  async popularNovels(
-    pageNo: number,
-    _options: Plugin.PopularNovelsOptions<undefined>,
-  ): Promise<Plugin.NovelItem[]> {
+  async popularNovels(pageNo: number): Promise<Plugin.NovelItem[]> {
     const sitePage = Math.max(1, pageNo);
     const pages = await this.catalogueSections(
       catalogueTypes.map(type => this.cataloguePath(type, sitePage)),

@@ -15,7 +15,7 @@ class ChireadsPlugin implements Plugin.PluginBase {
   name = 'Chireads';
   icon = 'src/fr/chireads/icon.png';
   site = 'https://chireads.com';
-  version = '2.0.7';
+  version = '2.0.8';
 
   async getCheerio(url: string): Promise<CheerioAPI> {
     const r = await fetchApi(url, {
@@ -35,7 +35,8 @@ class ChireadsPlugin implements Plugin.PluginBase {
   private absoluteUrl(url?: string): string {
     if (!url) return defaultCover;
     try {
-      return new URL(url, this.site).href;
+      const absolute = new URL(url, this.site);
+      return /^https?:$/.test(absolute.protocol) ? absolute.href : defaultCover;
     } catch {
       return defaultCover;
     }
@@ -230,26 +231,33 @@ class ChireadsPlugin implements Plugin.PluginBase {
     searchTerm: string,
     pageNo: number,
   ): Promise<Plugin.NovelItem[]> {
-    const responses = await Promise.allSettled(
-      [2, 811].map(parent =>
-        fetchApi(
+    const parents = await Promise.allSettled(
+      [2, 811].map(async parent => {
+        const response = await fetchApi(
           `${this.site}/wp-json/wp/v2/categories?parent=${parent}&search=${encodeURIComponent(searchTerm)}&per_page=100&page=${pageNo}`,
-        ),
-      ),
+        );
+        if (!response.ok) throw new Error(`Search parent ${parent} failed`);
+        const categories: unknown = await response.json();
+        if (
+          !Array.isArray(categories) ||
+          !categories.every(
+            category =>
+              category !== null &&
+              typeof category === 'object' &&
+              typeof (category as WordPressCategory).name === 'string' &&
+              typeof (category as WordPressCategory).link === 'string',
+          )
+        )
+          throw new Error(`Search parent ${parent} returned invalid data`);
+        return categories as WordPressCategory[];
+      }),
     );
-    const categories = (
-      await Promise.allSettled(
-        responses.flatMap(response =>
-          response.status === 'fulfilled' && response.value.ok
-            ? [response.value.json() as Promise<WordPressCategory[]>]
-            : [],
-        ),
-      )
-    ).flatMap(response =>
-      response.status === 'fulfilled' && Array.isArray(response.value)
-        ? response.value
-        : [],
+    const categories = parents.flatMap(parent =>
+      parent.status === 'fulfilled' ? parent.value : [],
     );
+    if (parents.every(parent => parent.status === 'rejected'))
+      throw new Error('Chireads search failed for all category parents');
+
     const seen = new Set<string>();
     return categories
       .map(category => ({

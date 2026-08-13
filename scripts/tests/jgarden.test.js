@@ -58,6 +58,7 @@ test('J-Garden lists, searches, and parses its public WordPress catalogue', asyn
   t.after(restore);
 
   const popular = await plugin.popularNovels(1);
+  assert.equal(plugin.version, '1.0.2');
   assert.deepEqual(
     popular.map(novel => novel.path),
     ['love-unseen', 'orv'],
@@ -116,6 +117,37 @@ test('J-Garden recognizes completed status labels', async t => {
   assert.equal(novel.status, 'Completed');
 });
 
+test('J-Garden recognizes an isolated accented completed status', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/jgarden.ts',
+    url => {
+      const key = new URL(url).pathname + new URL(url).search;
+      if (
+        key ===
+        '/wp-json/wp/v2/pages?slug=love-unseen&_fields=slug,link,title,content'
+      ) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                slug: 'love-unseen',
+                link: 'https://j-garden.fr/love-unseen/',
+                title: { rendered: 'Love Unseen' },
+                content: { rendered: '<p>Terminé</p>' },
+              },
+            ]),
+            { headers: { 'content-type': 'application/json' } },
+          ),
+        );
+      }
+      return fixtureFetch(url);
+    },
+  );
+  t.after(restore);
+
+  assert.equal((await plugin.parseNovel('love-unseen')).status, 'Completed');
+});
+
 test('J-Garden retains an available catalogue section and reports a total outage', async t => {
   const oneSectionFetch = url => {
     if (new URL(url).searchParams.get('slug') === 'jg-ln')
@@ -139,6 +171,48 @@ test('J-Garden retains an available catalogue section and reports a total outage
     () => Promise.reject(new Error('site unavailable')),
   );
   t.after(restore);
+  await assert.rejects(plugin.popularNovels(1), /catalogue/i);
+});
+
+test('J-Garden isolates malformed catalogue sections from valid siblings', async t => {
+  for (const malformed of [
+    { content: { rendered: '<a href="/invalid/">Invalid</a>' } },
+    [{ content: {} }],
+  ]) {
+    const { plugin, restore } = await loadPluginForTest(
+      'plugins/french/jgarden.ts',
+      url => {
+        if (new URL(url).searchParams.get('slug') === 'jg-ln') {
+          return Promise.resolve(
+            new Response(JSON.stringify(malformed), {
+              headers: { 'content-type': 'application/json' },
+            }),
+          );
+        }
+        return fixtureFetch(url);
+      },
+    );
+    t.after(restore);
+
+    assert.deepEqual(
+      (await plugin.popularNovels(1)).map(novel => novel.path),
+      ['orv'],
+    );
+  }
+});
+
+test('J-Garden reports catalogue failure when every section is malformed', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/jgarden.ts',
+    () =>
+      Promise.resolve(
+        new Response(JSON.stringify([{ content: { rendered: 42 } }]), {
+          headers: { 'content-type': 'application/json' },
+        }),
+      ),
+  );
+  t.after(restore);
+
   await assert.rejects(plugin.popularNovels(1), /catalogue/i);
 });
 

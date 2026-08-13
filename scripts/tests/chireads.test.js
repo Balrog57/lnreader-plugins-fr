@@ -73,7 +73,7 @@ test('Chireads finds Panlong through translated novel categories', async t => {
       },
     ],
   );
-  assert.equal(plugin.version, '2.0.7');
+  assert.equal(plugin.version, '2.0.8');
 });
 
 test('Chireads keeps large chapter lists in one response', async t => {
@@ -194,14 +194,53 @@ test('Chireads keeps successful category results when the other parent fails', a
   );
 });
 
-test('Chireads returns no search results when both category parents fail', async t => {
+test('Chireads reports search failure when neither category parent is valid', async t => {
+  const failures = [
+    {
+      name: 'rejected fetches',
+      fetch: () => Promise.reject(new Error('offline')),
+    },
+    {
+      name: 'non-OK responses',
+      fetch: () =>
+        Promise.resolve(new Response('Unavailable', { status: 503 })),
+    },
+    {
+      name: 'invalid JSON',
+      fetch: () => Promise.resolve(new Response('{', { status: 200 })),
+    },
+  ];
+
+  for (const failure of failures) {
+    await t.test(failure.name, async t => {
+      const { plugin, restore } = await loadPluginForTest(
+        'plugins/french/chireads.ts',
+        failure.fetch,
+      );
+      t.after(restore);
+
+      await assert.rejects(plugin.searchNovels('Panlong', 1), /search/i);
+    });
+  }
+});
+
+test('Chireads replaces non-HTTP cover schemes with the default cover', async t => {
   const { plugin, restore } = await loadPluginForTest(
     'plugins/french/chireads.ts',
-    () => Promise.reject(new Error('offline')),
+    () =>
+      Promise.resolve(
+        new Response(`
+          <h1 class="refresh-detail-title">Unsafe cover</h1>
+          <div class="refresh-detail-cover"><img src="javascript:alert(1)"></div>
+        `),
+      ),
   );
   t.after(restore);
 
-  assert.deepEqual(await plugin.searchNovels('Panlong', 1), []);
+  assert.equal(
+    (await plugin.parseNovel('/category/original/unsafe-cover/')).cover,
+    'https://github.com/LNReader/lnreader-plugins/blob/main/icons/src/coverNotAvailable.jpg?raw=true',
+  );
 });
 
 test('Chireads rejects non-OK catalogue HTML responses', async t => {

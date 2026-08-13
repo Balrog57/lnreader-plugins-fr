@@ -19,7 +19,7 @@ class JGardenPlugin implements Plugin.PluginBase {
   name = 'J-Garden';
   icon = 'src/fr/jgarden/icon.png';
   site = 'https://j-garden.fr/';
-  version = '1.0.1';
+  version = '1.0.2';
 
   resolveUrl(path: string): string {
     const url = new URL(path, this.site);
@@ -108,11 +108,25 @@ class JGardenPlugin implements Plugin.PluginBase {
   async popularNovels(pageNo: number): Promise<Plugin.NovelItem[]> {
     if (pageNo > 1) return [];
     const sections = await Promise.allSettled(
-      ['jg-ln', 'jg-web-novel'].map(section =>
-        this.getJson<Pick<WordPressPage, 'content'>[]>(
+      ['jg-ln', 'jg-web-novel'].map(async section => {
+        const pages = await this.getJson<unknown>(
           `/wp-json/wp/v2/pages?slug=${section}&_fields=content`,
-        ),
-      ),
+        );
+        if (
+          !Array.isArray(pages) ||
+          !pages.every(
+            page =>
+              page !== null &&
+              typeof page === 'object' &&
+              (page as Record<string, unknown>).content !== null &&
+              typeof (page as Record<string, unknown>).content === 'object' &&
+              typeof (page as { content: Record<string, unknown> }).content
+                .rendered === 'string',
+          )
+        )
+          throw new Error(`Invalid catalogue section: ${section}`);
+        return pages as Pick<WordPressPage, 'content'>[];
+      }),
     );
     const catalogues = sections.flatMap(section =>
       section.status === 'fulfilled' ? [section.value] : [],
@@ -158,16 +172,21 @@ class JGardenPlugin implements Plugin.PluginBase {
       }
     });
 
-    const details = $.text();
-    const status = /\b(?:termin(?:é|ée|e)|completed|complete|fini)\b/i.test(
-      details,
-    )
-      ? NovelStatus.Completed
-      : /\b(?:hiatus|en pause|pause)\b/i.test(details)
-        ? NovelStatus.OnHiatus
-        : /\b(?:en cours|ongoing|publication)\b/i.test(details)
-          ? NovelStatus.Ongoing
-          : NovelStatus.Unknown;
+    const details = $('body *')
+      .map((_, element) => $(element).text().trim())
+      .get()
+      .filter(Boolean)
+      .join(' ');
+    const status =
+      /\b(?:termin(?:é|ée|e)|completed|complete|fini)(?![A-Za-zÀ-ÖØ-öø-ÿ0-9_])/i.test(
+        details,
+      )
+        ? NovelStatus.Completed
+        : /\b(?:hiatus|en pause|pause)\b/i.test(details)
+          ? NovelStatus.OnHiatus
+          : /\b(?:en cours|ongoing|publication)\b/i.test(details)
+            ? NovelStatus.Ongoing
+            : NovelStatus.Unknown;
 
     return {
       path: page.slug,
