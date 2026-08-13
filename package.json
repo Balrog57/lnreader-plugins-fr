@@ -19,6 +19,7 @@
     "publish:plugins:windows": "powershell ./scripts/publish-plugins.ps1",
     "serve:dev": "npm run build:compile && npm run build:manifest:dev && serve",
     "lint": "npx eslint .",
+    "lint:french": "npx eslint plugins/french scripts",
     "lint:fix": "npx eslint . --fix",
     "format": "prettier --write \"./**/*.{js,ts}\"",
     "format:check": "prettier --check \"./**/*.{js,ts}\"",
@@ -29,6 +30,7 @@
     "check:french-live": "node scripts/check-french-plugins.js",
     "test:manifest": "node --test scripts/tests/assert-french-manifest.test.js",
     "test:projection": "node --test scripts/tests/french-projection.test.js",
+    "test:unit": "node --test",
     "prepare": "husky"
   },
   "author": "LNReader",
