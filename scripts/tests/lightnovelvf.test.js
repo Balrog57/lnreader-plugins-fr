@@ -132,6 +132,16 @@ test('LightNovelVF parses metadata, paginated JSON chapters, and readable conten
   assert.equal(novel.author, 'Legion20');
   assert.equal(novel.genres, 'Action, Fantaisie');
   assert.equal(novel.status, 'Ongoing');
+  for (const path of [
+    '/novel/supreme-magus',
+    'https://www.lightnovelvf.com/novel/supreme-magus',
+  ]) {
+    assert.equal((await plugin.parseNovel(path)).path, 'supreme-magus');
+  }
+  await assert.rejects(
+    plugin.parseNovel('https://example.com/novel/supreme-magus'),
+    /foreign origin/,
+  );
   assert.deepEqual(
     novel.chapters.map(chapter => chapter.chapterNumber),
     [114, 115],

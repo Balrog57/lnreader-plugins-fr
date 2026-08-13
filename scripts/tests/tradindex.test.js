@@ -103,6 +103,16 @@ test('Trad-Index loads paginated chapters and strips comments from prose', async
   assert.equal(novel.artist, 'Traducteur public');
   assert.equal(novel.genres, 'Action, Fantaisie');
   assert.equal(novel.status, 'Ongoing');
+  for (const path of [
+    '/oeuvre/dungeon-hunter',
+    'https://trad-index.com/oeuvre/dungeon-hunter',
+  ]) {
+    assert.equal((await plugin.parseNovel(path)).path, 'dungeon-hunter');
+  }
+  await assert.rejects(
+    plugin.parseNovel('https://example.com/oeuvre/dungeon-hunter'),
+    /foreign origin/,
+  );
   assert.deepEqual(
     novel.chapters.map(chapter => chapter.chapterNumber),
     [1, 2, 3],

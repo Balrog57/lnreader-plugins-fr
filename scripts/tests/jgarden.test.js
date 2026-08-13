@@ -6,7 +6,12 @@ import { loadPluginForTest } from './helpers/load-plugin.js';
 const chapterText = 'Texte public du chapitre. '.repeat(12);
 const fixtures = {
   '/wp-json/wp/v2/pages?slug=jg-ln&_fields=content': [
-    { content: { rendered: '<a href="/love-unseen/">Love Unseen</a>' } },
+    {
+      content: {
+        rendered:
+          '<a href="/love-unseen/">Love Unseen</a><a href="http://[">Lien invalide</a><a href="https://example.com/foreign/">Lien externe</a>',
+      },
+    },
   ],
   '/wp-json/wp/v2/pages?slug=jg-web-novel&_fields=content': [
     { content: { rendered: '<a href="/orv/">Omniscient Reader</a>' } },
@@ -18,7 +23,7 @@ const fixtures = {
       title: { rendered: 'Love Unseen' },
       content: {
         rendered:
-          '<img src="https://j-garden.fr/cover.webp"><p>Synopsis du roman.</p><a href="/love-unseen-t2-chapitre-1/">Tome 2 - Chapitre 1</a><a href="https://j-garden.fr/love-unseen-t1-chapitre-2/">Tome 1 - Chapitre 2</a><a href="/love-unseen-t1-chapitre-1/">Tome 1 - Chapitre 1</a><a href="/love-unseen-t1-chapitre-2/">Tome 1 - Chapitre 2</a>',
+          '<img src="https://j-garden.fr/cover.webp"><p>Synopsis du roman.</p><a href="/love-unseen-t2-chapitre-1/">Tome 2 - Chapitre 1</a><a href="/love-unseen-t1-postface/">Tome 1 - Postface</a><a href="/love-unseen-t1-epilogue/">Tome 1 - Épilogue</a><a href="/love-unseen-t1-bonus/">Tome 1 - Bonus</a><a href="/love-unseen-t1-interlude/">Tome 1 - Interlude</a><a href="https://j-garden.fr/love-unseen-t1-chapitre-2/">Tome 1 - Chapitre 2</a><a href="/love-unseen-t1-chapitre-1/">Tome 1 - Chapitre 1</a><a href="/love-unseen-t1-prologue/">Tome 1 - Prologue</a><a href="/love-unseen-t1-preface/">Tome 1 - Préface</a><a href="/love-unseen-t1-chapitre-2/">Tome 1 - Chapitre 2</a>',
       },
     },
   ],
@@ -63,8 +68,14 @@ test('J-Garden lists, searches, and parses its public WordPress catalogue', asyn
   assert.deepEqual(
     novel.chapters.map(chapter => chapter.path),
     [
+      'love-unseen-t1-preface',
+      'love-unseen-t1-prologue',
       'love-unseen-t1-chapitre-1',
       'love-unseen-t1-chapitre-2',
+      'love-unseen-t1-interlude',
+      'love-unseen-t1-bonus',
+      'love-unseen-t1-epilogue',
+      'love-unseen-t1-postface',
       'love-unseen-t2-chapitre-1',
     ],
   );

@@ -156,8 +156,9 @@ class TradIndexPlugin implements Plugin.PluginBase {
   }
 
   async parseNovel(novelPath: string): Promise<Plugin.SourceNovel> {
-    const slug = novelPath.replace(/^\/oeuvre\//, '').replace(/\/$/, '');
-    const html = await this.fetchHtml(`/oeuvre/${slug}`);
+    const novelUrl = this.resolveUrl(novelPath, true);
+    const slug = new URL(novelUrl).pathname.replace(/^\/oeuvre\//, '');
+    const html = await this.fetchHtml(novelUrl);
     const $ = load(html);
     const details = $('body').text().replace(/\s+/g, ' ');
     const formatStatus = details.match(

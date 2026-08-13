@@ -117,8 +117,9 @@ class LightNovelVFPlugin implements Plugin.PluginBase {
   }
 
   async parseNovel(novelPath: string): Promise<Plugin.SourceNovel> {
-    const slug = novelPath.replace(/^\/novel\//, '').replace(/^\/+|\/+$/g, '');
-    const html = await this.fetchHtml(this.resolveUrl(slug, true));
+    const novelUrl = this.resolveUrl(novelPath, true);
+    const slug = new URL(novelUrl).pathname.replace(/^\/novel\//, '');
+    const html = await this.fetchHtml(novelUrl);
     const $ = load(html);
     const statusText =
       this.labelledValue(html, 'statut') ||

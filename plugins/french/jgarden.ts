@@ -26,10 +26,14 @@ class JGardenPlugin implements Plugin.PluginBase {
   }
 
   private slugFromLink(link: string): string | undefined {
-    const url = new URL(link, this.site);
-    if (url.origin !== new URL(this.site).origin) return undefined;
-    const parts = url.pathname.split('/').filter(Boolean);
-    return parts[parts.length - 1];
+    try {
+      const url = new URL(link, this.site);
+      if (url.origin !== new URL(this.site).origin) return undefined;
+      const parts = url.pathname.split('/').filter(Boolean);
+      return parts[parts.length - 1];
+    } catch {
+      return undefined;
+    }
   }
 
   private async getJson<T>(path: string): Promise<T> {
@@ -60,14 +64,29 @@ class JGardenPlugin implements Plugin.PluginBase {
 
   private chapterSequence(name: string, path: string) {
     const source = `${name} ${path}`;
+    const volume = Number(
+      source.match(/(?:tome|volume|vol\.?|t)[\s_-]*(\d+)/i)?.[1] || 0,
+    );
+    // Within each volume: preface, prologue, numbered chapters, interlude,
+    // bonus, epilogue, then postface. Unrecognised links retain DOM order.
+    const specialKinds = [
+      ['preface', 0],
+      ['prologue', 1],
+      ['interlude', 3],
+      ['bonus', 4],
+      ['epilogue', 5],
+      ['postface', 6],
+    ] as const;
+    const special = specialKinds.find(([label]) =>
+      new RegExp(`(?:^|[\\s_-])${label}(?:$|[\\s_-])`, 'i').test(source),
+    );
     const chapter = source.match(
       /(?:chapitre|chapter|ch\.?)[\s_-]*(\d+(?:[.,]\d+)?)/i,
     );
-    if (!chapter) return undefined;
-    const volume = source.match(/(?:tome|volume|vol\.?|t)[\s_-]*(\d+)/i);
     return {
-      volume: Number(volume?.[1] || 0),
-      chapter: Number(chapter[1].replace(',', '.')),
+      volume,
+      kind: special?.[1] ?? (chapter ? 2 : 7),
+      chapter: Number(chapter?.[1].replace(',', '.') || 0),
     };
   }
 
@@ -135,9 +154,9 @@ class JGardenPlugin implements Plugin.PluginBase {
             right.chapter.name,
             right.chapter.path,
           );
-          if (!leftSequence || !rightSequence) return left.index - right.index;
           return (
             leftSequence.volume - rightSequence.volume ||
+            leftSequence.kind - rightSequence.kind ||
             leftSequence.chapter - rightSequence.chapter ||
             left.index - right.index
           );
