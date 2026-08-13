@@ -6,6 +6,7 @@ import { loadPluginForTest } from './helpers/load-plugin.js';
 const readableText = 'Texte du chapitre visible et lisible. '.repeat(12);
 const requests = [];
 let retryChapterPageRequests = 0;
+let serverErrorChapterPageRequests = 0;
 const fixtures = {
   '/novels-list?page=1': `
     <a href="/novel/supreme-magus"><img src="/covers/supreme-magus.webp"><span>Supreme Magus</span><span>114 chapitres</span><span>4.8</span></a>
@@ -36,6 +37,22 @@ const fixtures = {
     total: 2,
   },
   '/novel/retry-novel/chapitres?p=2&order=asc&q=': {
+    chapters: [{ number: '2', slug: '2', name: 'Second', created_at: null }],
+    current_page: 2,
+    last_page: 2,
+    total: 2,
+  },
+  '/novel/server-error-novel': `
+    <h1>Server Error Novel</h1>
+    <div id="lnv-novel" data-novel-slug="server-error-novel"></div>
+  `,
+  '/novel/server-error-novel/chapitres?p=1&order=asc&q=': {
+    chapters: [{ number: '1', slug: '1', name: 'First', created_at: null }],
+    current_page: 1,
+    last_page: 2,
+    total: 2,
+  },
+  '/novel/server-error-novel/chapitres?p=2&order=asc&q=': {
     chapters: [{ number: '2', slug: '2', name: 'Second', created_at: null }],
     current_page: 2,
     last_page: 2,
@@ -94,6 +111,17 @@ function fixtureFetch(url) {
     return Promise.resolve(
       new Response(JSON.stringify({ message: 'Too many requests' }), {
         status: 429,
+        headers: { 'content-type': 'application/json', 'retry-after': '0' },
+      }),
+    );
+  }
+  if (
+    key === '/novel/server-error-novel/chapitres?p=2&order=asc&q=' &&
+    serverErrorChapterPageRequests++ === 0
+  ) {
+    return Promise.resolve(
+      new Response(JSON.stringify({ message: 'Service unavailable' }), {
+        status: 503,
         headers: { 'content-type': 'application/json', 'retry-after': '0' },
       }),
     );
@@ -267,6 +295,21 @@ test('LightNovelVF retries a throttled chapter page', async t => {
 
   assert.deepEqual(
     (await plugin.parseNovel('retry-novel')).chapters.map(c => c.chapterNumber),
+    [1, 2],
+  );
+});
+
+test('LightNovelVF retries a transient server-error chapter page', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/lightnovelvf.ts',
+    fixtureFetch,
+  );
+  t.after(restore);
+
+  assert.deepEqual(
+    (await plugin.parseNovel('server-error-novel')).chapters.map(
+      c => c.chapterNumber,
+    ),
     [1, 2],
   );
 });

@@ -68,7 +68,11 @@ class LightNovelVFPlugin implements Plugin.PluginBase {
   private async fetchChapterPage(url: string): Promise<ChapterPage> {
     for (let attempt = 0; attempt < 6; attempt += 1) {
       const response = await fetchApi(url);
-      if (response.status === 429 && attempt < 5) {
+      if (
+        (response.status === 429 ||
+          (response.status >= 500 && response.status < 600)) &&
+        attempt < 5
+      ) {
         await new Promise(resolve =>
           setTimeout(resolve, this.retryDelay(response, attempt)),
         );
