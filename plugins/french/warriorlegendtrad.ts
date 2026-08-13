@@ -10,7 +10,7 @@ class WarriorLegendTradPlugin implements Plugin.PluginBase {
   name = 'Warrior Legend Trad';
   icon = 'src/fr/warriorlegendtrad/icon.png';
   site = 'https://warriorlegendtrad.wordpress.com';
-  version = '1.0.1';
+  version = '1.0.2';
 
   regexAuthors = [/Auteur\u00A0:([^\n]*)/];
 
@@ -163,9 +163,11 @@ class WarriorLegendTradPlugin implements Plugin.PluginBase {
   ): Promise<Plugin.NovelItem[]> {
     if (pageNo !== 1) return [];
 
-    const popularNovels = this.popularNovels(1);
+    const popularNovels = (
+      await Promise.all([this.popularNovels(1), this.popularNovels(2)])
+    ).flat();
 
-    const novels = (await popularNovels).filter(novel =>
+    const novels = popularNovels.filter(novel =>
       novel.name
         .toLowerCase()
         .normalize('NFD')

@@ -9,7 +9,7 @@ class NovhellPlugin implements Plugin.PluginBase {
   name = 'Novhell';
   icon = 'src/fr/novhell/icon.png';
   site = 'https://novhell.org';
-  version = '1.0.1';
+  version = '1.0.2';
 
   async getCheerio(url: string): Promise<CheerioAPI> {
     const r = await fetchApi(url, {
@@ -107,6 +107,7 @@ class NovhellPlugin implements Plugin.PluginBase {
       .replace(':', '')
       .trim();
     const chapters: Plugin.ChapterItem[] = [];
+    const chapterPaths = new Set<string>();
 
     $('main div article div div section div div div div div p a').each(
       (i, elem) => {
@@ -118,6 +119,9 @@ class NovhellPlugin implements Plugin.PluginBase {
         const chapterUrl = $(elem).attr('href');
         // Check if the chapter URL exists and contains the site name.
         if (chapterUrl && chapterUrl.includes(this.site)) {
+          const path = chapterUrl.replace(this.site, '');
+          if (chapterPaths.has(path)) return;
+          chapterPaths.add(path);
           const regex = /Chapitre (\d+)/g;
           let chapterNumber = 0;
           let match;
@@ -127,7 +131,7 @@ class NovhellPlugin implements Plugin.PluginBase {
           }
           chapters.push({
             name: chapterName,
-            path: chapterUrl.replace(this.site, ''),
+            path,
             chapterNumber: chapterNumber,
           });
         }

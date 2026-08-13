@@ -10,7 +10,31 @@ class WuxialnscantradPlugin implements Plugin.PluginBase {
   name = 'WuxiaLnScantrad';
   icon = 'src/fr/wuxialnscantrad/icon.png';
   site = 'https://wuxialnscantrad.wordpress.com';
-  version = '1.0.0';
+  version = '1.0.2';
+
+  private async findMovedChapter(chapterPath: string): Promise<string | null> {
+    const slug = chapterPath.split('/').filter(Boolean).pop() || '';
+    const match = slug.match(/^(.*?)-chapitre-(\d+)/i);
+    if (!match) return null;
+    const series = match[1].split('-').filter(Boolean).slice(0, 3).join(' ');
+    const query = `${series} chapitre ${match[2]}`;
+    const response = await fetchApi(
+      `https://public-api.wordpress.com/wp/v2/sites/wuxialnscantrad.wordpress.com/search?search=${encodeURIComponent(query)}&type=post&subtype=post&per_page=20`,
+    );
+    if (!response.ok) return null;
+    const results = (await response.json()) as {
+      title?: string;
+      url?: string;
+    }[];
+    const replacement = results.find(result =>
+      new RegExp(`chapitre\\D*${match[2]}(?:\\D|$)`, 'i').test(
+        result.title || '',
+      ),
+    )?.url;
+    if (!replacement) return null;
+    const url = new URL(replacement, this.site);
+    return url.origin === new URL(this.site).origin ? url.toString() : null;
+  }
 
   async getCheerio(url: string): Promise<CheerioAPI> {
     const r = await fetchApi(url, {
@@ -41,6 +65,15 @@ class WuxialnscantradPlugin implements Plugin.PluginBase {
         novels.push(novel);
       }
     });
+    await Promise.all(
+      novels.map(async item => {
+        const detail = await this.getCheerio(this.site + item.path);
+        item.cover =
+          detail('.entry-content p strong img').first().attr('src') ||
+          detail('.entry-content p img').first().attr('src') ||
+          defaultCover;
+      }),
+    );
     return novels;
   }
 
@@ -154,7 +187,18 @@ class WuxialnscantradPlugin implements Plugin.PluginBase {
   }
 
   async parseChapter(chapterPath: string): Promise<string> {
-    const $ = await this.getCheerio(this.site + chapterPath);
+    let response = await fetchApi(this.site + chapterPath, {
+      headers: { 'Accept-Encoding': 'deflate' },
+    });
+    if (!response.ok) {
+      const replacement = await this.findMovedChapter(chapterPath);
+      if (replacement)
+        response = await fetchApi(replacement, {
+          headers: { 'Accept-Encoding': 'deflate' },
+        });
+    }
+    if (!response.ok) return '';
+    const $ = load(await response.text());
 
     let contenuHtml = '';
     $('.entry-content')

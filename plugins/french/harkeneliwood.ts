@@ -10,7 +10,7 @@ class HarkenEliwoodPlugin implements Plugin.PluginBase {
   name = 'HarkenEliwood';
   icon = 'src/fr/harkeneliwood/icon.png';
   site = 'https://harkeneliwood.wordpress.com';
-  version = '1.0.0';
+  version = '1.0.1';
 
   async getCheerio(url: string): Promise<CheerioAPI> {
     const r = await fetchApi(url, {
@@ -43,6 +43,14 @@ class HarkenEliwoodPlugin implements Plugin.PluginBase {
           novels.push(novel);
         }
       });
+    await Promise.all(
+      novels.map(async item => {
+        const detail = await this.getCheerio(this.site + item.path);
+        item.cover =
+          detail('#content .entry-content p img').first().attr('src') ||
+          defaultCover;
+      }),
+    );
     return novels;
   }
 

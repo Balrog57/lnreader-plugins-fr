@@ -19,7 +19,7 @@ class JGardenPlugin implements Plugin.PluginBase {
   name = 'J-Garden';
   icon = 'src/fr/jgarden/icon.png';
   site = 'https://j-garden.fr/';
-  version = '1.0.0';
+  version = '1.0.1';
 
   resolveUrl(path: string): string {
     return new URL(path, this.site).toString();
@@ -48,8 +48,18 @@ class JGardenPlugin implements Plugin.PluginBase {
     $('a[href]').each((_, element) => {
       const href = $(element).attr('href');
       const path = href ? this.slugFromLink(href) : undefined;
-      const name = $(element).text().trim() || this.nameFromSlug(path || '');
-      if (path && name) novels.set(path, { name, path, cover: defaultCover });
+      const image = $(element).find('img').first();
+      const name =
+        $(element).text().trim() ||
+        image.attr('alt')?.trim() ||
+        this.nameFromSlug(path || '');
+      const cover = image.attr('src');
+      if (path && name)
+        novels.set(path, {
+          name,
+          path,
+          cover: cover ? this.resolveUrl(cover) : defaultCover,
+        });
     });
     return Array.from(novels.values());
   }

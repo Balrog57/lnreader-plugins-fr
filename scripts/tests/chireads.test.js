@@ -13,6 +13,17 @@ const fixtures = {
         link: 'https://chireads.com/category/translatedtales/panlong-coiling-dragon/',
       },
     ]),
+  '/wp-json/wp/v2/categories?parent=811&search=Panlong&per_page=100&page=1':
+    '[]',
+  '/wp-json/wp/v2/categories?parent=2&search=Across%20the%20Wall&per_page=100&page=1':
+    '[]',
+  '/wp-json/wp/v2/categories?parent=811&search=Across%20the%20Wall&per_page=100&page=1':
+    JSON.stringify([
+      {
+        name: 'Au-delÃ  du Mur | Across the Wall',
+        link: 'https://chireads.com/category/original/au-dela-du-mur/',
+      },
+    ]),
   [myriadPath]: `
     <h1 class="refresh-detail-title">La Tribulation des Myriades de Races_万族之劫</h1>
     <div class="refresh-detail-cover"><img src="https://chireads.com/myriad.jpg"></div>
@@ -58,7 +69,26 @@ test('Chireads finds Panlong through translated novel categories', async t => {
       },
     ],
   );
-  assert.equal(plugin.version, '2.0.1');
+  assert.equal(plugin.version, '2.0.2');
+});
+
+test('Chireads search also finds original novels', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/chireads.ts',
+    fixtureFetch,
+  );
+  t.after(restore);
+
+  const results = await plugin.searchNovels('Across the Wall', 1);
+  assert.deepEqual(
+    results.map(({ name, path }) => ({ name, path })),
+    [
+      {
+        name: 'Au-delÃ  du Mur | Across the Wall',
+        path: '/category/original/au-dela-du-mur/',
+      },
+    ],
+  );
 });
 
 test('Chireads parses all visible Myriad of the Races chapters', async t => {

@@ -16,7 +16,7 @@ class ChireadsPlugin implements Plugin.PluginBase {
   name = 'Chireads';
   icon = 'src/fr/chireads/icon.png';
   site = 'https://chireads.com';
-  version = '2.0.1';
+  version = '2.0.2';
 
   async getCheerio(url: string): Promise<CheerioAPI> {
     const r = await fetchApi(url, {
@@ -162,18 +162,36 @@ class ChireadsPlugin implements Plugin.PluginBase {
     searchTerm: string,
     pageNo: number,
   ): Promise<Plugin.NovelItem[]> {
-    const response = await fetchApi(
-      `${this.site}/wp-json/wp/v2/categories?parent=2&search=${encodeURIComponent(searchTerm)}&per_page=100&page=${pageNo}`,
+    const responses = await Promise.all(
+      [2, 811].map(parent =>
+        fetchApi(
+          `${this.site}/wp-json/wp/v2/categories?parent=${parent}&search=${encodeURIComponent(searchTerm)}&per_page=100&page=${pageNo}`,
+        ),
+      ),
     );
-    if (!response.ok) return [];
-    const categories = (await response.json()) as WordPressCategory[];
+    const categories = (
+      await Promise.all(
+        responses.map(response =>
+          response.ok
+            ? (response.json() as Promise<WordPressCategory[]>)
+            : Promise.resolve([]),
+        ),
+      )
+    ).flat();
+    const seen = new Set<string>();
     return categories
       .map(category => ({
         name: category.name,
         cover: defaultCover,
         path: this.toPath(category.link),
       }))
-      .filter(novel => novel.path.startsWith('/category/translatedtales/'));
+      .filter(
+        novel =>
+          (novel.path.startsWith('/category/translatedtales/') ||
+            novel.path.startsWith('/category/original/')) &&
+          !seen.has(novel.path) &&
+          Boolean(seen.add(novel.path)),
+      );
   }
 
   filters = {

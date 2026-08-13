@@ -9,7 +9,30 @@ class KissWoodPlugin implements Plugin.PluginBase {
   name = 'KissWood';
   icon = 'src/fr/kisswood/icon.png';
   site = 'https://kisswood.eu';
-  version = '1.0.0';
+  version = '1.0.1';
+
+  private async findMovedChapter(chapterPath: string): Promise<string | null> {
+    const slug = chapterPath.split('/').filter(Boolean).pop() || '';
+    const match = slug.match(/^(.*?)-chapitre-(\d+)/i);
+    if (!match) return null;
+    const query = `${match[1].replace(/-/g, ' ')} chapitre ${match[2]}`;
+    const response = await fetchApi(
+      `${this.site}/wp-json/wp/v2/search?search=${encodeURIComponent(query)}&type=post&subtype=post&per_page=20`,
+    );
+    if (!response.ok) return null;
+    const results = (await response.json()) as {
+      title?: string;
+      url?: string;
+    }[];
+    const replacement = results.find(result =>
+      new RegExp(`chapitre\\D*${match[2]}(?:\\D|$)`, 'i').test(
+        result.title || '',
+      ),
+    )?.url;
+    if (!replacement) return null;
+    const url = new URL(replacement, this.site);
+    return url.origin === new URL(this.site).origin ? url.toString() : null;
+  }
 
   async getCheerio(url: string): Promise<CheerioAPI> {
     const r = await fetchApi(url);
@@ -179,35 +202,18 @@ class KissWoodPlugin implements Plugin.PluginBase {
   }
 
   async parseChapter(chapterPath: string): Promise<string> {
-    const $ = await this.getCheerio(this.site + chapterPath);
-
-    const elements: string[] = $('.entry-content')
-      .contents()
-      .map((_, el) => $.html(el))
-      .get();
-
-    let hrIndexes: number[] = elements
-      .map((elem, index) => (elem.includes('<hr>') ? index : -1))
-      .filter(index => index !== -1);
-
-    if (hrIndexes.length === 0) {
-      hrIndexes = [
-        0,
-        elements.findIndex(
-          element =>
-            element.includes('https://fr.tipeee.com/kisswood/') ||
-            element.includes('>Sommaire</a>') ||
-            element.includes('>Chapitre Suivant</a>') ||
-            element.includes('———————————————————————————-') ||
-            element.includes('share=facebook'),
-        ),
-      ];
-    } else if (hrIndexes.length === 1) {
-      hrIndexes.unshift(0);
-    } else {
-      hrIndexes[0] += 1;
+    let response = await fetchApi(this.site + chapterPath);
+    if (!response.ok) {
+      const replacement = await this.findMovedChapter(chapterPath);
+      if (replacement) response = await fetchApi(replacement);
     }
-    return elements.slice(hrIndexes[0], hrIndexes[1]).join('\n');
+    if (!response.ok) return '';
+    const $ = load(await response.text());
+    const chapter = $('.entry-content').first().clone();
+    chapter
+      .find('script, style, .sharedaddy, [class*="sharing"], [id*="sharing"]')
+      .remove();
+    return chapter.html()?.trim() || '';
   }
 
   async searchNovels(

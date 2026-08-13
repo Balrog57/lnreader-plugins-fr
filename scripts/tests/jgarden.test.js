@@ -9,7 +9,7 @@ const fixtures = {
     {
       content: {
         rendered:
-          '<a href="/love-unseen/">Love Unseen</a><a href="http://[">Lien invalide</a><a href="https://example.com/foreign/">Lien externe</a>',
+          '<a href="/love-unseen/"><img src="https://j-garden.fr/love-unseen.webp" alt="Love Unseen"></a><a href="http://[">Lien invalide</a><a href="https://example.com/foreign/">Lien externe</a>',
       },
     },
   ],
@@ -62,6 +62,8 @@ test('J-Garden lists, searches, and parses its public WordPress catalogue', asyn
     popular.map(novel => novel.path),
     ['love-unseen', 'orv'],
   );
+  assert.equal(popular[0].name, 'Love Unseen');
+  assert.equal(popular[0].cover, 'https://j-garden.fr/love-unseen.webp');
 
   const novel = await plugin.parseNovel('love-unseen');
   assert.equal(novel.name, 'Love Unseen');

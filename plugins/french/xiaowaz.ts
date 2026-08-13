@@ -10,7 +10,7 @@ class XiaowazPlugin implements Plugin.PluginBase {
   name = 'Xiaowaz';
   icon = 'src/fr/xiaowaz/icon.png';
   site = 'https://xiaowaz.fr';
-  version = '1.0.2';
+  version = '1.0.3';
   static novels: Plugin.NovelItem[] | undefined;
 
   async getCheerio(url: string): Promise<CheerioAPI> {
@@ -171,13 +171,22 @@ class XiaowazPlugin implements Plugin.PluginBase {
     }
 
     const chapters: Plugin.ChapterItem[] = [];
+    const chapterPaths = new Set<string>();
     pathChapter.each((i, elem) => {
       const chapterName = $(elem).text().trim();
       const chapterUrl = $(elem).attr('href');
-      if (chapterUrl && chapterUrl.includes(this.site) && chapterName) {
+      if (
+        chapterUrl &&
+        chapterUrl.includes(this.site) &&
+        !/\.pdf(?:$|[?#])/i.test(chapterUrl) &&
+        chapterName
+      ) {
+        const path = chapterUrl.replace(this.site, '');
+        if (chapterPaths.has(path)) return;
+        chapterPaths.add(path);
         chapters.push({
           name: chapterName,
-          path: chapterUrl.replace(this.site, ''),
+          path,
         });
       }
     });
