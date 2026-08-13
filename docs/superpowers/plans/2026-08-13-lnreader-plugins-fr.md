@@ -14,7 +14,7 @@
 - The local checkout is exactly `C:\Users\Marc\Documents\1G1R\_Programmation\lnreader-plugins-fr`.
 - The default branch is `master`.
 - Published manifests contain only entries whose language label is `Français`.
-- Keep standalone French plugins and French records from `lightnovelwp`, `madara`, and `mtlnovel`.
+- Keep standalone French plugins and working French records from `lightnovelwp` and `madara`; the approved fix removes dead MassNovel and MTL Novel (FR) records.
 - Apply `Balrog57/lnreader-plugins:fix/french-plugins-2026` over the initial upstream snapshot.
 - Keep `.broken.ts` source files out of compilation, live checks, and publication.
 - Scheduled synchronization pushes directly only after every required test passes; conflicts or failures change nothing remotely.

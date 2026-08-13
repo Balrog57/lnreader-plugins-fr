@@ -35,10 +35,11 @@ The initial source snapshot is built from `LNReader/lnreader-plugins` and then
 overlaid with the French corrections from
 `Balrog57/lnreader-plugins:fix/french-plugins-2026`.
 
-The import keeps both standalone French plugins and French records currently
-embedded in the `lightnovelwp`, `madara`, and `mtlnovel` multi-source systems.
-This prevents a naive `plugins/french`-only copy from silently dropping French
-providers.
+The import keeps both standalone French plugins and the working French records
+embedded in the `lightnovelwp` and `madara` multi-source systems. The approved
+French fix removes the dead MassNovel and MTL Novel (FR) records. This prevents
+a naive `plugins/french`-only copy from silently dropping working French
+providers while avoiding publication of known-dead ones.
 
 ## Upstream synchronization
 
