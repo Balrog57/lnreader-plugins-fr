@@ -115,10 +115,32 @@ class ChireadsPlugin implements Plugin.PluginBase {
       ? ['/category/translatedtales', '/category/original']
       : [`/tag/${tag}`];
 
+    const catalogues = isAll
+      ? await Promise.allSettled(
+          bases.map(base =>
+            this.getCheerio(`${this.site}${base}/page/${pageNo}`),
+          ),
+        )
+      : [
+          {
+            status: 'fulfilled' as const,
+            value: await this.getCheerio(
+              `${this.site}${bases[0]}/page/${pageNo}`,
+            ),
+          },
+        ];
+    if (
+      isAll &&
+      catalogues.every(catalogue => catalogue.status === 'rejected')
+    ) {
+      throw new Error('All catalogue pages failed');
+    }
+
     const novels: Plugin.NovelItem[] = [];
     const seen = new Set<string>();
-    for (const base of bases) {
-      const $ = await this.getCheerio(`${this.site}${base}/page/${pageNo}`);
+    for (const catalogue of catalogues) {
+      if (catalogue.status !== 'fulfilled') continue;
+      const $ = catalogue.value;
       for (const novel of this.parseCards($)) {
         if (seen.has(novel.path)) continue;
         seen.add(novel.path);

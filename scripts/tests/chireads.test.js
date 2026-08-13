@@ -230,3 +230,60 @@ test('Chireads rejects chapter content that is too short to read', async t => {
 
   await assert.rejects(plugin.parseChapter('/c/short/'), /readable/i);
 });
+
+test('Chireads keeps original catalogue results when translated catalogue fails', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/chireads.ts',
+    url => {
+      if (url.includes('/category/translatedtales/page/1')) {
+        return Promise.resolve(new Response('Unavailable', { status: 503 }));
+      }
+      if (url.includes('/category/original/page/1')) {
+        return Promise.resolve(
+          new Response(`
+            <ul class="refresh-card-grid">
+              <li class="refresh-card">
+                <div class="refresh-card-title"><a href="https://chireads.com/category/original/survivor/">Survivor</a></div>
+                <div class="refresh-card-cover"><img src="/survivor.jpg"></div>
+              </li>
+            </ul>
+          `),
+        );
+      }
+      return fixtureFetch(url);
+    },
+  );
+  t.after(restore);
+
+  const novels = await plugin.popularNovels(1, {});
+  assert.deepEqual(novels, [
+    {
+      name: 'Survivor',
+      cover: 'https://chireads.com/survivor.jpg',
+      path: '/category/original/survivor/',
+    },
+  ]);
+});
+
+test('Chireads signals failure when both all-category catalogues fail', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/chireads.ts',
+    () => Promise.resolve(new Response('Unavailable', { status: 503 })),
+  );
+  t.after(restore);
+
+  await assert.rejects(plugin.popularNovels(1, {}), /catalogue/i);
+});
+
+test('Chireads keeps single-tag catalogue failures visible', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/chireads.ts',
+    () => Promise.resolve(new Response('Unavailable', { status: 503 })),
+  );
+  t.after(restore);
+
+  await assert.rejects(
+    plugin.popularNovels(1, { filters: { tag: { value: 'action' } } }),
+    /HTTP.*503/i,
+  );
+});
