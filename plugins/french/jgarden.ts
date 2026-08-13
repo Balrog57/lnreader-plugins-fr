@@ -22,7 +22,10 @@ class JGardenPlugin implements Plugin.PluginBase {
   version = '1.0.1';
 
   resolveUrl(path: string): string {
-    return new URL(path, this.site).toString();
+    const url = new URL(path, this.site);
+    if (url.origin !== new URL(this.site).origin)
+      throw new Error('Cannot resolve a foreign origin');
+    return url.toString();
   }
 
   private slugFromLink(link: string): string | undefined {
@@ -39,6 +42,8 @@ class JGardenPlugin implements Plugin.PluginBase {
   private async getJson<T>(path: string): Promise<T> {
     const response = await fetchApi(this.resolveUrl(path));
     if (!response.ok) throw new Error(`Failed to load ${path}`);
+    if (!/[/+]json\b/i.test(response.headers.get('content-type') || ''))
+      throw new Error(`Expected a JSON response for ${path}`);
     return response.json() as Promise<T>;
   }
 
@@ -102,15 +107,19 @@ class JGardenPlugin implements Plugin.PluginBase {
 
   async popularNovels(pageNo: number): Promise<Plugin.NovelItem[]> {
     if (pageNo > 1) return [];
-    const [lightNovels, webNovels] = await Promise.all(
+    const sections = await Promise.allSettled(
       ['jg-ln', 'jg-web-novel'].map(section =>
         this.getJson<Pick<WordPressPage, 'content'>[]>(
           `/wp-json/wp/v2/pages?slug=${section}&_fields=content`,
         ),
       ),
     );
+    const catalogues = sections.flatMap(section =>
+      section.status === 'fulfilled' ? [section.value] : [],
+    );
+    if (!catalogues.length) throw new Error('Failed to load catalogue');
     const novels = new Map<string, Plugin.NovelItem>();
-    for (const section of [...lightNovels, ...webNovels]) {
+    for (const section of catalogues.flat()) {
       for (const novel of this.parseCatalogue(section.content.rendered)) {
         novels.set(novel.path, novel);
       }
@@ -119,7 +128,8 @@ class JGardenPlugin implements Plugin.PluginBase {
   }
 
   async parseNovel(novelPath: string): Promise<Plugin.SourceNovel> {
-    const slug = this.slugFromLink(novelPath) || novelPath;
+    const novelUrl = this.resolveUrl(novelPath);
+    const slug = this.slugFromLink(novelUrl) || novelPath;
     const pages = await this.getJson<WordPressPage[]>(
       `/wp-json/wp/v2/pages?slug=${encodeURIComponent(slug)}&_fields=slug,link,title,content`,
     );
@@ -148,12 +158,25 @@ class JGardenPlugin implements Plugin.PluginBase {
       }
     });
 
+    const details = $.text();
+    const status = /\b(?:termin(?:é|ée|e)|completed|complete|fini)\b/i.test(
+      details,
+    )
+      ? NovelStatus.Completed
+      : /\b(?:hiatus|en pause|pause)\b/i.test(details)
+        ? NovelStatus.OnHiatus
+        : /\b(?:en cours|ongoing|publication)\b/i.test(details)
+          ? NovelStatus.Ongoing
+          : NovelStatus.Unknown;
+
     return {
       path: page.slug,
       name: load(page.title.rendered).text().trim(),
-      cover: $('img').first().attr('src') || defaultCover,
+      cover: $('img').first().attr('src')
+        ? this.resolveUrl($('img').first().attr('src')!)
+        : defaultCover,
       summary: firstChapter.prevAll().text().trim(),
-      status: NovelStatus.Ongoing,
+      status,
       chapters: Array.from(chapters.values())
         .sort((left, right) => {
           const leftSequence = this.chapterSequence(
@@ -171,12 +194,16 @@ class JGardenPlugin implements Plugin.PluginBase {
             left.index - right.index
           );
         })
-        .map(({ chapter }) => chapter),
+        .map(({ chapter }, index) => ({
+          ...chapter,
+          chapterNumber: index + 1,
+        })),
     };
   }
 
   async parseChapter(chapterPath: string): Promise<string> {
-    const slug = this.slugFromLink(chapterPath) || chapterPath;
+    const chapterUrl = this.resolveUrl(chapterPath);
+    const slug = this.slugFromLink(chapterUrl) || chapterPath;
     let posts = await this.getJson<
       Pick<WordPressPage, 'content' | 'title' | 'link'>[]
     >(

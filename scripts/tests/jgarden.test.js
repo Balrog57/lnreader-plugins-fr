@@ -23,7 +23,7 @@ const fixtures = {
       title: { rendered: 'Love Unseen' },
       content: {
         rendered:
-          '<img src="https://j-garden.fr/cover.webp"><p>Synopsis du roman.</p><a href="/love-unseen-t2-chapitre-1/">Tome 2 - Chapitre 1</a><a href="/love-unseen-t1-postface/">Tome 1 - Postface</a><a href="/love-unseen-t1-epilogue/">Tome 1 - Épilogue</a><a href="/love-unseen-t1-bonus/">Tome 1 - Bonus</a><a href="/love-unseen-t1-interlude/">Tome 1 - Interlude</a><a href="https://j-garden.fr/love-unseen-t1-chapitre-2/">Tome 1 - Chapitre 2</a><a href="/love-unseen-t1-chapitre-1/">Tome 1 - Chapitre 1</a><a href="/love-unseen-t1-prologue/">Tome 1 - Prologue</a><a href="/love-unseen-t1-preface/">Tome 1 - Préface</a><a href="/love-unseen-t1-chapitre-2/">Tome 1 - Chapitre 2</a>',
+          '<img src="/cover.webp"><p>Synopsis du roman.</p><p>Statut : Terminé</p><a href="/love-unseen-t2-chapitre-1/">Tome 2 - Chapitre 1</a><a href="/love-unseen-t1-postface/">Tome 1 - Postface</a><a href="/love-unseen-t1-epilogue/">Tome 1 - Épilogue</a><a href="/love-unseen-t1-bonus/">Tome 1 - Bonus</a><a href="/love-unseen-t1-interlude/">Tome 1 - Interlude</a><a href="https://j-garden.fr/love-unseen-t1-chapitre-2/">Tome 1 - Chapitre 2</a><a href="/love-unseen-t1-chapitre-1/">Tome 1 - Chapitre 1</a><a href="/love-unseen-t1-prologue/">Tome 1 - Prologue</a><a href="/love-unseen-t1-preface/">Tome 1 - Préface</a><a href="/love-unseen-t1-chapitre-2/">Tome 1 - Chapitre 2</a>',
       },
     },
   ],
@@ -67,6 +67,7 @@ test('J-Garden lists, searches, and parses its public WordPress catalogue', asyn
 
   const novel = await plugin.parseNovel('love-unseen');
   assert.equal(novel.name, 'Love Unseen');
+  assert.equal(novel.cover, 'https://j-garden.fr/cover.webp');
   assert.deepEqual(
     novel.chapters.map(chapter => chapter.path),
     [
@@ -88,4 +89,99 @@ test('J-Garden lists, searches, and parses its public WordPress catalogue', asyn
   const search = await plugin.searchNovels('love unseen', 1);
   assert.equal(search.length, 1);
   assert.equal(search[0].path, 'love-unseen');
+});
+
+test('J-Garden assigns monotone chapter numbers after special-order sorting', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/jgarden.ts',
+    fixtureFetch,
+  );
+  t.after(restore);
+
+  const novel = await plugin.parseNovel('love-unseen');
+  assert.deepEqual(
+    novel.chapters.map(chapter => chapter.chapterNumber),
+    [1, 2, 3, 4, 5, 6, 7, 8, 9],
+  );
+});
+
+test('J-Garden recognizes completed status labels', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/jgarden.ts',
+    fixtureFetch,
+  );
+  t.after(restore);
+
+  const novel = await plugin.parseNovel('love-unseen');
+  assert.equal(novel.status, 'Completed');
+});
+
+test('J-Garden retains an available catalogue section and reports a total outage', async t => {
+  const oneSectionFetch = url => {
+    if (new URL(url).searchParams.get('slug') === 'jg-ln')
+      return Promise.reject(new Error('light novel section unavailable'));
+    return fixtureFetch(url);
+  };
+  const oneSection = await loadPluginForTest(
+    'plugins/french/jgarden.ts',
+    oneSectionFetch,
+  );
+  t.after(oneSection.restore);
+
+  const novels = await oneSection.plugin.popularNovels(1);
+  assert.deepEqual(
+    novels.map(novel => novel.path),
+    ['orv'],
+  );
+
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/jgarden.ts',
+    () => Promise.reject(new Error('site unavailable')),
+  );
+  t.after(restore);
+  await assert.rejects(plugin.popularNovels(1), /catalogue/i);
+});
+
+test('J-Garden rejects non-JSON WordPress responses', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/jgarden.ts',
+    url => {
+      if (new URL(url).searchParams.get('slug') === 'love-unseen')
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              fixtures[
+                '/wp-json/wp/v2/pages?slug=love-unseen&_fields=slug,link,title,content'
+              ],
+            ),
+            {
+              status: 200,
+              headers: { 'content-type': 'text/html' },
+            },
+          ),
+        );
+      return fixtureFetch(url);
+    },
+  );
+  t.after(restore);
+
+  await assert.rejects(plugin.parseNovel('love-unseen'), /json/i);
+});
+
+test('J-Garden rejects foreign chapter paths before fetching them', async t => {
+  const requested = [];
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/jgarden.ts',
+    url => {
+      requested.push(url);
+      return fixtureFetch(url);
+    },
+  );
+  t.after(restore);
+
+  await assert.rejects(
+    plugin.parseChapter('https://example.com/chapter'),
+    /foreign/i,
+  );
+  assert.deepEqual(requested, []);
 });
