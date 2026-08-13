@@ -4,6 +4,7 @@ import path from 'node:path';
 export const EXCLUDED_FRENCH_SOURCE_IDS = new Set([
   'massnovel',
   'mtlnovel-fr',
+  'phenixscans',
   'worldnovel',
 ]);
 

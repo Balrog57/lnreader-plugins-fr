@@ -32,7 +32,7 @@ test('rejects broken plugin artifacts', () => {
   assert.throws(
     () =>
       assertFrenchManifest([
-        { ...valid, id: 'phenixscans.broken', url: 'https://example.test/a.js' },
+        { ...valid, id: 'example.broken', url: 'https://example.test/a.js' },
       ]),
     /Broken plugin/,
   );

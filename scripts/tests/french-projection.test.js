@@ -35,6 +35,7 @@ test('excludes permanently unsupported French sources', () => {
     { id: 'worldnovel', options: { lang: 'French' } },
     { id: 'MassNovel', options: { lang: 'French' } },
     { id: 'mtlnovel-fr', options: { lang: 'French' } },
+    { id: 'PhenixScans', options: { lang: 'French' } },
   ];
 
   assert.deepEqual(
