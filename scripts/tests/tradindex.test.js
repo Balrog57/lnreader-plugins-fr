@@ -10,6 +10,10 @@ const fixtures = {
     <a href="/oeuvre/roman-web"><img src="/roman.webp"><span class="font-mono">12 ch.</span><span class="line-clamp-3 font-display">Roman Web</span><span class="truncate font-mono">Wuxia France</span></a>
     <a href="/oeuvre/scan-interdit" data-source-type="Manhwa"><img src="/scan.webp"><span class="font-mono">8 ch.</span><span class="line-clamp-3 font-display">Scan interdit</span><span class="truncate font-mono">Scan</span></a>
     <a href="/oeuvre/dungeon-hunter"><span class="font-mono">35 ch.</span><span class="line-clamp-3 font-display">Dungeon Hunter</span><span class="truncate font-mono">Slimegate</span></a>
+    <a href="?type=Web+Novel&page=2">2</a>
+  `,
+  '/catalogue?type=Web+Novel&page=2': `
+    <a href="/oeuvre/second-web"><span class="line-clamp-3 font-display">Second Web</span></a>
   `,
   '/catalogue?type=Light+Novel&page=1': `
     <a href="/oeuvre/dungeon-hunter"><img src="/dungeon.webp"><span class="font-mono">35 ch.</span><span class="line-clamp-3 font-display">Dungeon Hunter</span><span class="truncate font-mono">Slimegate</span></a>
@@ -68,12 +72,12 @@ test('Trad-Index lists only prose sources and searches the two novel catalogues'
   );
   t.after(restore);
 
-  assert.equal(plugin.version, '1.0.1');
+  assert.equal(plugin.version, '1.0.2');
 
   const popular = await plugin.popularNovels(1, {});
   assert.deepEqual(
     popular.map(novel => novel.name),
-    ['Roman Web', 'Dungeon Hunter'],
+    ['Roman Web', 'Dungeon Hunter', 'Second Web'],
   );
   assert.equal(
     requests.some(path => /Manhwa|scan/i.test(path)),

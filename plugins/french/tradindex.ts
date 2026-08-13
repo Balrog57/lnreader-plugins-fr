@@ -12,7 +12,7 @@ class TradIndexPlugin implements Plugin.PluginBase {
   name = 'Trad-Index';
   icon = 'src/fr/tradindex/icon.png';
   site = 'https://trad-index.com/';
-  version = '1.0.1';
+  version = '1.0.2';
 
   resolveUrl(path: string, isNovel = false): string {
     const url = new URL(path, this.site);
@@ -64,6 +64,24 @@ class TradIndexPlugin implements Plugin.PluginBase {
   private cataloguePath(type: string, pageNo: number, searchTerm?: string) {
     const query = searchTerm ? `&q=${encodeURIComponent(searchTerm)}` : '';
     return `/catalogue?type=${type}${query}&page=${pageNo}`;
+  }
+
+  private async fetchCataloguePages(type: string): Promise<string[]> {
+    const first = await this.fetchHtml(this.cataloguePath(type, 1));
+    const $ = load(first);
+    let lastPage = 1;
+    $('a[href*="page="]').each((_, element) => {
+      const href = $(element).attr('href');
+      if (!href) return;
+      const page = Number(new URL(href, this.site).searchParams.get('page'));
+      if (Number.isInteger(page)) lastPage = Math.max(lastPage, page);
+    });
+    const rest = await Promise.all(
+      Array.from({ length: lastPage - 1 }, (_, index) =>
+        this.fetchHtml(this.cataloguePath(type, index + 2)),
+      ),
+    );
+    return [first, ...rest];
   }
 
   private chapterItems(html: string, slug: string): Plugin.ChapterItem[] {
@@ -123,14 +141,14 @@ class TradIndexPlugin implements Plugin.PluginBase {
     pageNo: number,
     _options: Plugin.PopularNovelsOptions<undefined>,
   ): Promise<Plugin.NovelItem[]> {
+    if (pageNo !== 1) return [];
     const pages = await Promise.all(
-      catalogueTypes.map(type =>
-        this.fetchHtml(this.cataloguePath(type, pageNo)),
-      ),
+      catalogueTypes.map(type => this.fetchCataloguePages(type)),
     );
     return [
       ...new Map(
         pages
+          .flat()
           .flatMap(html => this.parseCards(html))
           .map(novel => [novel.path, novel]),
       ).values(),
