@@ -15,7 +15,10 @@ class ChireadsPlugin implements Plugin.PluginBase {
   name = 'Chireads';
   icon = 'src/fr/chireads/icon.png';
   site = 'https://chireads.com';
-  version = '2.0.4';
+  version = '2.0.5';
+
+  private static readonly COMPACT_PATH_THRESHOLD = 700;
+  private static readonly LEGACY_PATH_COUNT = 100;
 
   async getCheerio(url: string): Promise<CheerioAPI> {
     const r = await fetchApi(url, {
@@ -155,10 +158,16 @@ class ChireadsPlugin implements Plugin.PluginBase {
         name: compactName
           ? `${compactName[1]} - ${compactName[2].trim()}`
           : name,
-        path: this.compactChapterPath(chapterUrl),
+        path: this.toPath(chapterUrl),
       });
     });
-    return chapters;
+    if (chapters.length <= ChireadsPlugin.COMPACT_PATH_THRESHOLD)
+      return chapters;
+    return chapters.map((chapter, index) =>
+      index < ChireadsPlugin.LEGACY_PATH_COUNT
+        ? chapter
+        : { ...chapter, path: this.compactChapterPath(chapter.path) },
+    );
   }
 
   async parseChapter(chapterUrl: string): Promise<string> {

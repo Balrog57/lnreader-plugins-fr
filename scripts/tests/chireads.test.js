@@ -69,13 +69,13 @@ test('Chireads finds Panlong through translated novel categories', async t => {
       },
     ],
   );
-  assert.equal(plugin.version, '2.0.4');
+  assert.equal(plugin.version, '2.0.5');
 });
 
 test('Chireads keeps large chapter lists in one response', async t => {
   const largePath = '/category/translatedtales/large-series/';
   const links = Array.from(
-    { length: 205 },
+    { length: 705 },
     (_, i) =>
       `<li><a href="https://chireads.com/translatedtales/large-series/chapitre-${i + 1}/2026/01/01/">Chapitre ${i + 1}</a></li>`,
   ).join('');
@@ -98,9 +98,13 @@ test('Chireads keeps large chapter lists in one response', async t => {
 
   const firstPage = await plugin.parseNovel(largePath);
   assert.equal(firstPage.totalPages, undefined);
-  assert.equal(firstPage.chapters.length, 205);
-  assert.equal(firstPage.chapters[0].path, '/c/chapitre-1/');
-  assert.equal(firstPage.chapters.at(-1).path, '/c/chapitre-205/');
+  assert.equal(firstPage.chapters.length, 705);
+  assert.equal(
+    firstPage.chapters[0].path,
+    '/translatedtales/large-series/chapitre-1/2026/01/01/',
+  );
+  assert.equal(firstPage.chapters[100].path, '/c/chapitre-101/');
+  assert.equal(firstPage.chapters.at(-1).path, '/c/chapitre-705/');
 });
 
 test('Chireads search also finds original novels', async t => {
@@ -132,7 +136,10 @@ test('Chireads parses all visible Myriad of the Races chapters', async t => {
   const novel = await plugin.parseNovel(myriadPath);
   assert.deepEqual(
     novel.chapters.map(chapter => chapter.path),
-    ['/c/chapitre-1/', '/c/chapitre-2/'],
+    [
+      '/translatedtales/myriad/chapitre-1/2025/01/13/',
+      '/translatedtales/myriad/chapitre-2/2025/01/14/',
+    ],
   );
   assert.equal(novel.name, 'La Tribulation des Myriades de Races_万族之劫');
   assert.deepEqual(
