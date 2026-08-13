@@ -1,0 +1,168 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { loadPluginForTest } from './helpers/load-plugin.js';
+
+const readableText = 'Texte du chapitre visible et lisible. '.repeat(12);
+const requests = [];
+const fixtures = {
+  '/novels-list?page=1': `
+    <a href="/novel/supreme-magus"><img src="/covers/supreme-magus.webp"><span>Supreme Magus</span><span>114 chapitres</span><span>4.8</span></a>
+    <a href="/novel/lord-of-mysteries"><img src="/covers/lord-of-mysteries.webp"><span>Lord of Mysteries</span><span>1 432 ch.</span><span>4.9</span></a>
+  `,
+  '/novels-list?page=2&search=Supreme%20Magus': `
+    <a href="/novel/supreme-magus"><img src="/covers/supreme-magus.webp"><span>Supreme Magus</span><span>114 chapitres</span><span>4.8</span></a>
+  `,
+  '/novel/supreme-magus': `
+    <h1>Supreme Magus</h1>
+    <img class="lnv-novel-cover" src="/covers/supreme-magus.webp">
+    <div class="lnv-synopsis__body">Un mage survit dans un nouveau monde.</div>
+    <p><a itemprop="author">Legion20</a><span>En cours</span></p>
+    <p><a itemprop="genre">Action</a><a itemprop="genre">Fantaisie</a></p>
+    <div id="lnv-novel" data-novel-slug="supreme-magus"></div>
+  `,
+  '/novel/supreme-magus/chapitres?p=1&order=asc&q=': {
+    chapters: [
+      {
+        number: '114',
+        slug: '114',
+        name_fr: 'Leçon',
+        name: 'Lesson',
+        created_at: '2026-06-16T00:15:40.000000Z',
+      },
+    ],
+    current_page: 1,
+    last_page: 2,
+    total: 2,
+  },
+  '/novel/supreme-magus/chapitres?p=2&order=asc&q=': {
+    chapters: [
+      {
+        number: '115',
+        slug: '115',
+        name: 'Second lesson',
+        created_at: '2026-06-17T00:15:40.000000Z',
+      },
+    ],
+    current_page: 2,
+    last_page: 2,
+    total: 2,
+  },
+  '/novel/supreme-magus/114': `
+    <div class="lnv-reader-content">
+      <header>Supreme Magus - Chapitre 114</header>
+      <nav>Chapitre précédent</nav>
+      <div class="advertising">Publicité</div>
+      <p>${readableText}</p>
+      <footer>Chapitre suivant</footer>
+    </div>
+  `,
+};
+
+function fixtureFetch(url) {
+  const parsed = new URL(url);
+  const key = parsed.pathname + parsed.search;
+  requests.push(key);
+  const body = fixtures[key];
+  return Promise.resolve(
+    new Response(
+      typeof body === 'string'
+        ? body
+        : JSON.stringify(body ?? { message: 'Not found' }),
+      {
+        status: body ? 200 : 404,
+        headers: {
+          'content-type':
+            typeof body === 'string' ? 'text/html' : 'application/json',
+        },
+      },
+    ),
+  );
+}
+
+test('LightNovelVF builds catalogue and search routes and returns clean cards', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/lightnovelvf.ts',
+    fixtureFetch,
+  );
+  t.after(restore);
+
+  const popular = await plugin.popularNovels(1, {});
+  assert.deepEqual(
+    popular.map(novel => ({ name: novel.name, path: novel.path })),
+    [
+      { name: 'Supreme Magus', path: 'supreme-magus' },
+      { name: 'Lord of Mysteries', path: 'lord-of-mysteries' },
+    ],
+  );
+  assert.equal(
+    popular[0].cover,
+    'https://www.lightnovelvf.com/covers/supreme-magus.webp',
+  );
+
+  const search = await plugin.searchNovels('Supreme Magus', 2);
+  assert.deepEqual(
+    search.map(novel => novel.path),
+    ['supreme-magus'],
+  );
+  assert.ok(requests.includes('/novels-list?page=1'));
+  assert.ok(requests.includes('/novels-list?page=2&search=Supreme%20Magus'));
+});
+
+test('LightNovelVF parses metadata, paginated JSON chapters, and readable content', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/lightnovelvf.ts',
+    fixtureFetch,
+  );
+  t.after(restore);
+
+  assert.equal(plugin.id, 'lightnovelvf');
+  assert.equal(plugin.name, 'LightNovelVF');
+  assert.equal(plugin.icon, 'src/fr/lightnovelvf/icon.png');
+  assert.equal(plugin.site, 'https://www.lightnovelvf.com/');
+  assert.equal(plugin.version, '1.0.0');
+
+  const novel = await plugin.parseNovel('supreme-magus');
+  assert.equal(novel.name, 'Supreme Magus');
+  assert.equal(novel.summary, 'Un mage survit dans un nouveau monde.');
+  assert.equal(
+    novel.cover,
+    'https://www.lightnovelvf.com/covers/supreme-magus.webp',
+  );
+  assert.equal(novel.author, 'Legion20');
+  assert.equal(novel.genres, 'Action, Fantaisie');
+  assert.equal(novel.status, 'Ongoing');
+  assert.deepEqual(
+    novel.chapters.map(chapter => chapter.chapterNumber),
+    [114, 115],
+  );
+  assert.deepEqual(
+    novel.chapters.map(chapter => chapter.name),
+    ['Leçon', 'Second lesson'],
+  );
+  assert.deepEqual(
+    novel.chapters.map(chapter => chapter.releaseTime),
+    ['2026-06-16T00:15:40.000000Z', '2026-06-17T00:15:40.000000Z'],
+  );
+  assert.ok(
+    requests.includes('/novel/supreme-magus/chapitres?p=1&order=asc&q='),
+  );
+  assert.ok(
+    requests.includes('/novel/supreme-magus/chapitres?p=2&order=asc&q='),
+  );
+
+  const chapter = await plugin.parseChapter('supreme-magus/114');
+  assert.match(chapter, /Texte du chapitre visible/);
+  assert.doesNotMatch(
+    chapter,
+    /Supreme Magus|Chapitre précédent|Publicité|Chapitre suivant/,
+  );
+  assert.equal(
+    plugin.resolveUrl('supreme-magus', true),
+    'https://www.lightnovelvf.com/novel/supreme-magus',
+  );
+  assert.equal(
+    plugin.resolveUrl('supreme-magus/114'),
+    'https://www.lightnovelvf.com/novel/supreme-magus/114',
+  );
+});
