@@ -1,5 +1,5 @@
 import { CheerioAPI, load } from 'cheerio';
-import { fetchApi } from '@libs/fetch';
+import { fetchApi, fetchHtmlChecked } from '@libs/fetch';
 import { Plugin } from '@/types/plugin';
 import { defaultCover } from '@libs/defaultCover';
 import { NovelStatus } from '@libs/novelStatus';
@@ -9,7 +9,7 @@ class KissWoodPlugin implements Plugin.PluginBase {
   name = 'KissWood';
   icon = 'src/fr/kisswood/icon.png';
   site = 'https://kisswood.eu';
-  version = '1.0.1';
+  version = '1.0.2';
 
   private async findMovedChapter(chapterPath: string): Promise<string | null> {
     const slug = chapterPath.split('/').filter(Boolean).pop() || '';
@@ -35,10 +35,7 @@ class KissWoodPlugin implements Plugin.PluginBase {
   }
 
   async getCheerio(url: string): Promise<CheerioAPI> {
-    const r = await fetchApi(url);
-    const body = await r.text();
-    const $ = load(body);
-    return $;
+    return load(await fetchHtmlChecked(url));
   }
 
   async getNovelsCovers(
@@ -149,7 +146,7 @@ class KissWoodPlugin implements Plugin.PluginBase {
     let novel: Plugin.SourceNovel = {
       path: novelPath,
       name: 'Sans titre',
-      status: NovelStatus.Ongoing,
+      status: NovelStatus.Unknown,
     };
 
     const $ = await this.getCheerio(this.site + novelPath);
@@ -176,6 +173,7 @@ class KissWoodPlugin implements Plugin.PluginBase {
     ].join(', ');
 
     const chapters: Plugin.ChapterItem[] = [];
+    const chapterPaths = new Set<string>();
     $(chapterSelectors).each((i, elem) => {
       const chapterName = $(elem).text().trim();
       const chapterUrl = $(elem).attr('href')?.replace('http://', 'https://');
@@ -187,13 +185,14 @@ class KissWoodPlugin implements Plugin.PluginBase {
         !chapterUrl.includes('share=facebook') &&
         !chapterUrl.includes('share=x') &&
         !chapterUrl.includes('/category/traductions/') &&
-        !chapterUrl.includes('/category/tour-des-mondes/') &&
-        // Removal of duplicates
-        !chapters.some(chapter => this.site + chapter.path === chapterUrl)
+        !chapterUrl.includes('/category/tour-des-mondes/')
       ) {
+        const path = chapterUrl.replace(this.site, '');
+        if (chapterPaths.has(path)) return;
+        chapterPaths.add(path);
         chapters.push({
           name: chapterName,
-          path: chapterUrl.replace(this.site, ''),
+          path,
         });
       }
     });
@@ -202,18 +201,58 @@ class KissWoodPlugin implements Plugin.PluginBase {
   }
 
   async parseChapter(chapterPath: string): Promise<string> {
-    let response = await fetchApi(this.site + chapterPath);
-    if (!response.ok) {
+    let body: string;
+    try {
+      body = await fetchHtmlChecked(this.site + chapterPath);
+    } catch (error) {
       const replacement = await this.findMovedChapter(chapterPath);
-      if (replacement) response = await fetchApi(replacement);
+      if (!replacement) throw error;
+      body = await fetchHtmlChecked(replacement);
     }
-    if (!response.ok) return '';
-    const $ = load(await response.text());
+
+    const $ = load(body);
     const chapter = $('.entry-content').first().clone();
     chapter
-      .find('script, style, .sharedaddy, [class*="sharing"], [id*="sharing"]')
+      .find(
+        'script, style, ins, iframe, .ads, .sharedaddy, [class*="sharing"], [id*="sharing"]',
+      )
       .remove();
-    return chapter.html()?.trim() || '';
+
+    const elements = chapter
+      .contents()
+      .map((_, element) => $.html(element))
+      .get();
+    const separators = elements
+      .map((element, index) => (/<hr\b/i.test(element) ? index : -1))
+      .filter(index => index !== -1);
+    const markerIndex = elements.findIndex(
+      element =>
+        !/<img\b/i.test(element) &&
+        [
+          'https://fr.tipeee.com/kisswood/',
+          '>Sommaire</a>',
+          '>Chapitre Suivant</a>',
+          '———————————————————————————-',
+          'share=facebook',
+        ].some(marker => element.includes(marker)),
+    );
+    const start = separators.length > 1 ? separators[0] + 1 : 0;
+    const end =
+      separators.length > 1
+        ? separators[1]
+        : separators.length === 1
+          ? separators[0]
+          : markerIndex >= 0
+            ? markerIndex
+            : elements.length;
+    const content = elements.slice(start, end).join('\n');
+    const parsedContent = load(content);
+    if (
+      parsedContent.text().replace(/\s+/g, ' ').trim().length < 200 &&
+      !parsedContent('img').length
+    )
+      throw new Error('No readable chapter content found');
+    return content;
   }
 
   async searchNovels(

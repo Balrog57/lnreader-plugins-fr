@@ -1,5 +1,5 @@
 import { CheerioAPI, load } from 'cheerio';
-import { fetchApi } from '@libs/fetch';
+import { fetchHtmlChecked } from '@libs/fetch';
 import { Plugin } from '@/types/plugin';
 import { defaultCover } from '@libs/defaultCover';
 import { NovelStatus } from '@libs/novelStatus';
@@ -10,7 +10,7 @@ class WarriorLegendTradPlugin implements Plugin.PluginBase {
   name = 'Warrior Legend Trad';
   icon = 'src/fr/warriorlegendtrad/icon.png';
   site = 'https://warriorlegendtrad.wordpress.com';
-  version = '1.0.2';
+  version = '1.0.3';
 
   regexAuthors = [/Auteur\u00A0:([^\n]*)/];
 
@@ -19,10 +19,7 @@ class WarriorLegendTradPlugin implements Plugin.PluginBase {
   regexSummary = [/Synopsis\u00A0:([\s\S]*)index chapitre :/i];
 
   async getCheerio(url: string): Promise<CheerioAPI> {
-    const r = await fetchApi(url);
-    const body = await r.text();
-    const $ = load(body);
-    return $;
+    return load(await fetchHtmlChecked(url));
   }
 
   async popularNovels(pageNo: number): Promise<Plugin.NovelItem[]> {
@@ -84,7 +81,7 @@ class WarriorLegendTradPlugin implements Plugin.PluginBase {
         const chapterUrl = $(elem).attr('href');
         const releaseDate = dayjs(
           chapterUrl?.substring(this.site.length + 1, this.site.length + 11),
-        ).format('DD MMMM YYYY');
+        ).format('YYYY-MM-DD');
         if (chapterUrl && chapterUrl.includes(this.site) && chapterName) {
           chapters.push({
             name: chapterName,
@@ -137,11 +134,12 @@ class WarriorLegendTradPlugin implements Plugin.PluginBase {
       return NovelStatus.Cancelled;
     }
 
-    return NovelStatus.Ongoing;
+    return NovelStatus.Unknown;
   }
 
   async parseChapter(chapterPath: string): Promise<string> {
     const $ = await this.getCheerio(this.site + chapterPath);
+    $('.entry-content').find('script, style, ins, iframe, .ads').remove();
     let contenuHtml = '';
     $('.entry-content')
       .contents()

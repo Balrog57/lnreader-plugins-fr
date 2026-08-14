@@ -5,6 +5,12 @@ import { loadPluginForTest } from './helpers/load-plugin.js';
 
 const myriadPath =
   '/category/translatedtales/la-tribulation-des-myriades-de-races_%e4%b8%87%e6%97%8f%e4%b9%8b%e5%8a%ab/';
+const myriadSlug = decodeURIComponent(
+  myriadPath.split('/').filter(Boolean).at(-1),
+);
+const myriadCategoryPath = `/wp-json/wp/v2/categories?slug=${encodeURIComponent(myriadSlug)}&per_page=100&_fields=id,link,parent`;
+const myriadPostsPath =
+  '/wp-json/wp/v2/posts?categories=123&per_page=100&page=1&orderby=date&order=asc&_fields=slug,title,date';
 const fixtures = {
   '/wp-json/wp/v2/categories?parent=2&search=Panlong&per_page=100&page=1':
     JSON.stringify([
@@ -37,6 +43,31 @@ const fixtures = {
       <li><a href="https://chireads.com/uncategorized/chapitre-4-archive/2025/01/16/">Chapitre 4 – Archive</a></li>
     </ul>
   `,
+  [myriadCategoryPath]: JSON.stringify([
+    { id: 123, link: `https://chireads.com${myriadPath}`, parent: 2 },
+  ]),
+  [myriadPostsPath]: JSON.stringify([
+    {
+      date: '2025-01-13T17:00:00',
+      slug: 'chapitre-1',
+      title: { rendered: 'Chapitre 1 &#8211; Père et Fils' },
+    },
+    {
+      date: '2025-01-14T17:00:00',
+      slug: 'chapitre-2',
+      title: { rendered: 'Chapitre 2 &#8211; Les académies' },
+    },
+    {
+      date: '2025-01-15T17:00:00',
+      slug: 'chapitre-3-original',
+      title: { rendered: 'Chapitre 3 &#8211; Original' },
+    },
+    {
+      date: '2025-01-16T17:00:00',
+      slug: 'chapitre-4-archive',
+      title: { rendered: 'Chapitre 4 &#8211; Archive' },
+    },
+  ]),
   '/c/chapitre-3-original/': `<main id="content"><div class="sharedaddy">Share this chapter</div><p>${'Chapitre original. '.repeat(20)}</p><script>tracking()</script></main>`,
 };
 
@@ -51,6 +82,7 @@ function fixtureFetch(url) {
         'content-type': key.startsWith('/wp-json/')
           ? 'application/json'
           : 'text/html',
+        ...(key === myriadPostsPath ? { 'x-wp-totalpages': '1' } : {}),
       },
     }),
   );
@@ -73,39 +105,61 @@ test('Chireads finds Panlong through translated novel categories', async t => {
       },
     ],
   );
-  assert.equal(plugin.version, '2.0.8');
+  assert.equal(plugin.version, '2.1.0');
 });
 
-test('Chireads keeps large chapter lists in one response', async t => {
+test('Chireads pages large chapter lists through WordPress', async t => {
   const largePath = '/category/translatedtales/large-series/';
-  const links = Array.from(
-    { length: 705 },
-    (_, i) =>
-      `<li><a href="https://chireads.com/translatedtales/large-series/chapitre-${i + 1}/2026/01/01/">Chapitre ${i + 1}</a></li>`,
-  ).join('');
-  const largeFixtures = {
-    ...fixtures,
-    [largePath]: `<h1 class="refresh-detail-title">Large series</h1><ul class="refresh-detail-chapter-list">${links}</ul>`,
-  };
+  const posts = Array.from({ length: 205 }, (_, index) => ({
+    date: `2026-01-${String((index % 28) + 1).padStart(2, '0')}T17:00:00`,
+    slug: `chapitre-${index + 1}`,
+    title: { rendered: `Chapitre ${index + 1}` },
+  }));
   const { plugin, restore } = await loadPluginForTest(
     'plugins/french/chireads.ts',
     url => {
       const parsed = new URL(url);
       const key = parsed.pathname + parsed.search;
-      const body = largeFixtures[key];
+      let body;
+      let totalPages;
+      if (key === largePath)
+        body = '<h1 class="refresh-detail-title">Large series</h1>';
+      else if (parsed.pathname.endsWith('/categories'))
+        body = JSON.stringify([
+          {
+            id: 900,
+            link: `https://chireads.com${largePath}`,
+            parent: 2,
+          },
+        ]);
+      else if (parsed.pathname.endsWith('/posts')) {
+        const page = Number(parsed.searchParams.get('page'));
+        body = JSON.stringify(posts.slice((page - 1) * 100, page * 100));
+        totalPages = '3';
+      }
       return Promise.resolve(
-        new Response(body ?? 'Not found', { status: body ? 200 : 404 }),
+        new Response(body ?? 'Not found', {
+          status: body ? 200 : 404,
+          headers: totalPages ? { 'x-wp-totalpages': totalPages } : {},
+        }),
       );
     },
   );
   t.after(restore);
 
   const firstPage = await plugin.parseNovel(largePath);
-  assert.equal(firstPage.totalPages, undefined);
-  assert.equal(firstPage.chapters.length, 705);
+  assert.equal(firstPage.totalPages, 3);
+  assert.equal(firstPage.chapters.length, 100);
   assert.equal(firstPage.chapters[0].path, '/c/chapitre-1/');
-  assert.equal(firstPage.chapters[100].path, '/c/chapitre-101/');
-  assert.equal(firstPage.chapters.at(-1).path, '/c/chapitre-705/');
+  const chapters = [
+    ...firstPage.chapters,
+    ...(await plugin.parsePage(largePath, '2')).chapters,
+    ...(await plugin.parsePage(largePath, '3')).chapters,
+  ];
+  assert.equal(chapters.length, 205);
+  assert.equal(new Set(chapters.map(chapter => chapter.path)).size, 205);
+  assert.equal(chapters[100].path, '/c/chapitre-101/');
+  assert.equal(chapters.at(-1).path, '/c/chapitre-205/');
 });
 
 test('Chireads search also finds original novels', async t => {
@@ -227,13 +281,31 @@ test('Chireads reports search failure when neither category parent is valid', as
 test('Chireads replaces non-HTTP cover schemes with the default cover', async t => {
   const { plugin, restore } = await loadPluginForTest(
     'plugins/french/chireads.ts',
-    () =>
-      Promise.resolve(
+    url => {
+      const parsed = new URL(url);
+      if (parsed.pathname.endsWith('/categories'))
+        return Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                id: 901,
+                link: 'https://chireads.com/category/original/unsafe-cover/',
+                parent: 811,
+              },
+            ]),
+          ),
+        );
+      if (parsed.pathname.endsWith('/posts'))
+        return Promise.resolve(
+          new Response('[]', { headers: { 'x-wp-totalpages': '1' } }),
+        );
+      return Promise.resolve(
         new Response(`
           <h1 class="refresh-detail-title">Unsafe cover</h1>
           <div class="refresh-detail-cover"><img src="javascript:alert(1)"></div>
         `),
-      ),
+      );
+    },
   );
   t.after(restore);
 

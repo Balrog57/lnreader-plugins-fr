@@ -1,5 +1,5 @@
 import { load, CheerioAPI } from 'cheerio';
-import { fetchApi } from '@libs/fetch';
+import { fetchHtmlChecked } from '@libs/fetch';
 import { Plugin } from '@/types/plugin';
 import { NovelStatus } from '@libs/novelStatus';
 import { Filters, FilterTypes } from '@libs/filterInputs';
@@ -10,16 +10,14 @@ class NovelDeGlacePlugin implements Plugin.PluginBase {
   name = 'NovelDeGlace';
   icon = 'src/fr/noveldeglace/icon.png';
   site = 'https://noveldeglace.com/';
-  version = '1.0.5';
+  version = '1.0.6';
 
-  async getCheerio(url: string): Promise<CheerioAPI | undefined> {
-    const r = await fetchApi(url, {
-      headers: { 'Accept-Encoding': 'deflate' },
-    });
-    if (!r.ok) return undefined;
-    const body = await r.text();
-    const loadedCheerio = load(body);
-    return loadedCheerio;
+  async getCheerio(url: string): Promise<CheerioAPI> {
+    return load(
+      await fetchHtmlChecked(url, {
+        headers: { 'Accept-Encoding': 'deflate' },
+      }),
+    );
   }
 
   parseNovels(
@@ -76,14 +74,11 @@ class NovelDeGlacePlugin implements Plugin.PluginBase {
     }
     url += '/page/' + pageNo;
     const $ = await this.getCheerio(url);
-    if (!$) return [];
     return this.parseNovels($, showLatestNovels);
   }
 
   async parseNovel(novelPath: string): Promise<Plugin.SourceNovel> {
     const $ = await this.getCheerio(this.site + novelPath);
-    if (!$) throw new Error('Failed to load page (open in web view)');
-
     const novel: Plugin.SourceNovel = { path: novelPath, name: 'Untitled' };
 
     novel.name = $('span.current').text().trim();
@@ -221,12 +216,16 @@ class NovelDeGlacePlugin implements Plugin.PluginBase {
 
   async parseChapter(chapterPath: string): Promise<string> {
     const $ = await this.getCheerio(this.site + chapterPath);
-    if (!$) throw new Error('Failed to load page (open in web view)');
-
-    $('.mistape_caption').remove();
-    const chapterText =
-      $('.chapter-content').html() || $('.entry-content').html() || '';
-    return chapterText;
+    const chapter = $('.chapter-content').first().length
+      ? $('.chapter-content').first()
+      : $('.entry-content').first();
+    chapter.find('script, style, ins, iframe, .ads, .mistape_caption').remove();
+    if (
+      chapter.text().replace(/\s+/g, ' ').trim().length < 200 &&
+      !chapter.find('img').length
+    )
+      throw new Error('No readable chapter content found');
+    return chapter.html() || '';
   }
 
   async searchNovels(
@@ -236,8 +235,6 @@ class NovelDeGlacePlugin implements Plugin.PluginBase {
     if (num !== 1) return []; // only 1 page of results
     const url = this.site + 'roman';
     const $ = await this.getCheerio(url);
-    if (!$) throw new Error('Failed to load page (open in web view)');
-
     let novels = this.parseNovels($, false);
 
     novels = novels.filter(novel =>

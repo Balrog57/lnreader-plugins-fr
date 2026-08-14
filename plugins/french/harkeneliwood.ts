@@ -1,5 +1,5 @@
 import { CheerioAPI, load } from 'cheerio';
-import { fetchApi } from '@libs/fetch';
+import { fetchHtmlChecked } from '@libs/fetch';
 import { Plugin } from '@/types/plugin';
 import { defaultCover } from '@libs/defaultCover';
 import { NovelStatus } from '@libs/novelStatus';
@@ -10,15 +10,14 @@ class HarkenEliwoodPlugin implements Plugin.PluginBase {
   name = 'HarkenEliwood';
   icon = 'src/fr/harkeneliwood/icon.png';
   site = 'https://harkeneliwood.wordpress.com';
-  version = '1.0.1';
+  version = '1.0.2';
 
   async getCheerio(url: string): Promise<CheerioAPI> {
-    const r = await fetchApi(url, {
-      headers: { 'Accept-Encoding': 'deflate' },
-    });
-    const body = await r.text();
-    const $ = load(body);
-    return $;
+    return load(
+      await fetchHtmlChecked(url, {
+        headers: { 'Accept-Encoding': 'deflate' },
+      }),
+    );
   }
 
   async popularNovels(pageNo: number): Promise<Plugin.NovelItem[]> {
@@ -66,7 +65,7 @@ class HarkenEliwoodPlugin implements Plugin.PluginBase {
       $('#content .entry-content p img').first().attr('src') || defaultCover;
     novel.summary = this.getSummary($('#content .entry-content').text());
     novel.author = this.getAuthor($('#content .entry-content').text());
-    novel.status = NovelStatus.Ongoing;
+    novel.status = NovelStatus.Unknown;
     const chapters: Plugin.ChapterItem[] = [];
     $('#content .entry-content p a').each((i, elem) => {
       const chapterName = $(elem).text().trim();
@@ -75,7 +74,7 @@ class HarkenEliwoodPlugin implements Plugin.PluginBase {
       if (chapterUrl && chapterUrl.includes(this.site) && chapterName) {
         const releaseDate = dayjs(
           chapterUrl?.substring(this.site.length + 1, this.site.length + 11),
-        ).format('DD MMMM YYYY');
+        ).format('YYYY-MM-DD');
         chapters.push({
           name: chapterName,
           path: chapterUrl.replace(this.site, ''),
@@ -141,6 +140,7 @@ class HarkenEliwoodPlugin implements Plugin.PluginBase {
     const $ = await this.getCheerio(this.site + chapterPath);
     const title = $('h1.entry-title');
     const chapter = $('div.entry-content');
+    chapter.find('script, style, ins, iframe, .ads').remove();
     return (title.html() || '') + (chapter.html() || '');
   }
 

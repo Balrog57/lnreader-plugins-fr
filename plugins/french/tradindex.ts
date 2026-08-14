@@ -4,7 +4,7 @@ import { fetchApi } from '@libs/fetch';
 import { NovelStatus } from '@libs/novelStatus';
 import { Plugin } from '@/types/plugin';
 
-const catalogueTypes = ['Web+Novel', 'Light+Novel'];
+const catalogueTypes = ['Web+Novel', 'Light+Novel', 'Manhwa'];
 const chapterPathPattern = /^\/oeuvre\/([^/?#]+)\/chapitre\/(\d+(?:[.,]\d+)?)/;
 
 class TradIndexPlugin implements Plugin.PluginBase {
@@ -12,7 +12,7 @@ class TradIndexPlugin implements Plugin.PluginBase {
   name = 'Trad-Index';
   icon = 'src/fr/tradindex/icon.png';
   site = 'https://trad-index.com/';
-  version = '1.0.5';
+  version = '1.0.6';
 
   resolveUrl(path: string, isNovel = false): string {
     const url = new URL(path, this.site);
@@ -83,9 +83,7 @@ class TradIndexPlugin implements Plugin.PluginBase {
         .first()
         .text()
         .trim();
-      const sourceType = $(element).attr('data-source-type')?.trim();
-      if (!name || (sourceType && !/^(?:Web|Light) Novel$/i.test(sourceType)))
-        return;
+      if (!name) return;
       const cover = $(element).find('img').first().attr('src');
       novels.set(match[1], {
         name,
@@ -160,7 +158,7 @@ class TradIndexPlugin implements Plugin.PluginBase {
     const pages = await this.catalogueSections(
       catalogueTypes.map(type => this.cataloguePath(type, sitePage)),
     );
-    return [
+    const novels = [
       ...new Map(
         pages
           .flat()
@@ -168,6 +166,9 @@ class TradIndexPlugin implements Plugin.PluginBase {
           .map(novel => [novel.path, novel]),
       ).values(),
     ];
+    if (sitePage === 1 && !novels.length)
+      throw new Error('Trad-Index catalogue returned no work cards');
+    return novels;
   }
 
   async searchNovels(
@@ -193,7 +194,7 @@ class TradIndexPlugin implements Plugin.PluginBase {
     const $ = load(html);
     const details = $('body').text().replace(/\s+/g, ' ');
     const formatStatus = details.match(
-      /(Web Novel|Light Novel)\s*·\s*([^\n]+)/i,
+      /(Web Novel|Light Novel|Manhwa)\s*·\s*([^\n]+)/i,
     );
     const getDetail = (label: string) => {
       let value: string | undefined;

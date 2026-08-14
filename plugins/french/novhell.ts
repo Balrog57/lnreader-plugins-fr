@@ -1,5 +1,5 @@
 import { CheerioAPI, load } from 'cheerio';
-import { fetchApi } from '@libs/fetch';
+import { fetchHtmlChecked } from '@libs/fetch';
 import { Plugin } from '@/types/plugin';
 import { defaultCover } from '@libs/defaultCover';
 import { NovelStatus } from '@libs/novelStatus';
@@ -9,15 +9,14 @@ class NovhellPlugin implements Plugin.PluginBase {
   name = 'Novhell';
   icon = 'src/fr/novhell/icon.png';
   site = 'https://novhell.org';
-  version = '1.0.2';
+  version = '1.0.3';
 
   async getCheerio(url: string): Promise<CheerioAPI> {
-    const r = await fetchApi(url, {
-      headers: { 'Accept-Encoding': 'deflate' },
-    });
-    const body = await r.text();
-    const $ = load(body);
-    return $;
+    return load(
+      await fetchHtmlChecked(url, {
+        headers: { 'Accept-Encoding': 'deflate' },
+      }),
+    );
   }
 
   async popularNovels(pageNo: number): Promise<Plugin.NovelItem[]> {
@@ -65,7 +64,7 @@ class NovhellPlugin implements Plugin.PluginBase {
         ?.replace('- NovHell', '') || '';
     novel.cover =
       $('section div div div div div img').first().attr('src') || defaultCover;
-    novel.status = NovelStatus.Ongoing;
+    novel.status = NovelStatus.Unknown;
     novel.author = $("strong:contains('Ecrit par ')")
       .parent()
       .text()
@@ -174,10 +173,16 @@ class NovhellPlugin implements Plugin.PluginBase {
       const chapter = sections.eq(numberOfSection - positionChapter);
 
       if (title && chapter) {
-        return (title.html() || '') + (chapter.html() || '');
+        const content = (title.html() || '') + (chapter.html() || '');
+        const parsedContent = load(content);
+        if (
+          parsedContent.text().replace(/\s+/g, ' ').trim().length >= 200 ||
+          parsedContent('img').length
+        )
+          return content;
       }
     }
-    return '';
+    throw new Error('No readable chapter content found');
   }
 
   async searchNovels(

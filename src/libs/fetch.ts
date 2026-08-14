@@ -4,6 +4,7 @@
  */
 export {
   fetchApi,
+  fetchHtmlChecked,
   fetchText,
   fetchProto,
   fetchFile,

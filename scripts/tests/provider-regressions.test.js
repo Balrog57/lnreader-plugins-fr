@@ -124,7 +124,7 @@ test('KissWood recovers a moved chapter from WordPress search', async t => {
       );
     if (parsed.pathname === '/kioresse/jashin-average-chapitre-93/')
       return htmlResponse(
-        '<div class="entry-content"><p>Contenu restaurÃ© du chapitre 94.</p></div>',
+        `<div class="entry-content"><p>${'Contenu restaurÃ© du chapitre 94. '.repeat(12)}</p></div>`,
       );
     return Promise.resolve(new Response('Not found', { status: 404 }));
   };
@@ -164,7 +164,7 @@ test('WuxiaLnScantrad recovers a moved chapter from WordPress.com search', async
       )
     )
       return htmlResponse(
-        '<div class="entry-content"><p>Contenu restaurÃ© du chapitre 78.</p></div>',
+        `<div class="entry-content"><p>${'Contenu restaurÃ© du chapitre 78. '.repeat(12)}</p></div>`,
       );
     return Promise.resolve(new Response('Not found', { status: 404 }));
   };

@@ -10,12 +10,24 @@ type WordPressCategory = {
   link: string;
 };
 
-class ChireadsPlugin implements Plugin.PluginBase {
+type WordPressNovelCategory = {
+  id: number;
+  link: string;
+  parent: number;
+};
+
+type WordPressPost = {
+  date: string;
+  slug: string;
+  title: { rendered: string };
+};
+
+class ChireadsPlugin implements Plugin.PagePlugin {
   id = 'chireads';
   name = 'Chireads';
   icon = 'src/fr/chireads/icon.png';
   site = 'https://chireads.com';
-  version = '2.0.8';
+  version = '2.1.0';
 
   async getCheerio(url: string): Promise<CheerioAPI> {
     const r = await fetchApi(url, {
@@ -151,10 +163,94 @@ class ChireadsPlugin implements Plugin.PluginBase {
     return novels;
   }
 
-  async parseNovel(novelPath: string): Promise<Plugin.SourceNovel> {
-    const novel: Plugin.SourceNovel = { path: novelPath, name: '' };
+  private async chapterPage(
+    novelPath: string,
+    page: number,
+  ): Promise<Plugin.SourcePage & { totalPages: number }> {
+    if (!Number.isInteger(page) || page < 1) throw new Error('Invalid page');
 
-    const $ = await this.getCheerio(this.site + novelPath);
+    const path = this.toPath(novelPath);
+    const slug = new URL(path, this.site).pathname
+      .split('/')
+      .filter(Boolean)
+      .at(-1);
+    if (!slug) throw new Error('Invalid Chireads novel path');
+
+    const categoryResponse = await fetchApi(
+      `${this.site}/wp-json/wp/v2/categories?slug=${encodeURIComponent(decodeURIComponent(slug))}&per_page=100&_fields=id,link,parent`,
+    );
+    if (!categoryResponse.ok)
+      throw new Error(
+        `Category lookup failed with HTTP ${categoryResponse.status}`,
+      );
+    const categoryData: unknown = await categoryResponse.json();
+    if (!Array.isArray(categoryData))
+      throw new Error('Category lookup returned invalid data');
+    const category = categoryData.find(
+      (item): item is WordPressNovelCategory =>
+        item !== null &&
+        typeof item === 'object' &&
+        typeof (item as WordPressNovelCategory).id === 'number' &&
+        typeof (item as WordPressNovelCategory).link === 'string' &&
+        [2, 811].includes((item as WordPressNovelCategory).parent) &&
+        this.toPath((item as WordPressNovelCategory).link) === path,
+    );
+    if (!category) throw new Error('Chireads novel category not found');
+
+    const postsResponse = await fetchApi(
+      `${this.site}/wp-json/wp/v2/posts?categories=${category.id}&per_page=100&page=${page}&orderby=date&order=asc&_fields=slug,title,date`,
+    );
+    if (!postsResponse.ok)
+      throw new Error(`Chapter page failed with HTTP ${postsResponse.status}`);
+    const postData: unknown = await postsResponse.json();
+    if (
+      !Array.isArray(postData) ||
+      !postData.every(
+        post =>
+          post !== null &&
+          typeof post === 'object' &&
+          typeof (post as WordPressPost).date === 'string' &&
+          typeof (post as WordPressPost).slug === 'string' &&
+          typeof (post as WordPressPost).title?.rendered === 'string',
+      )
+    )
+      throw new Error('Chapter page returned invalid data');
+
+    const chapters = new Map<string, Plugin.ChapterItem>();
+    for (const post of postData as WordPressPost[]) {
+      const path = `/c/${post.slug}/`;
+      const title = load(post.title.rendered).text().trim();
+      const match = title.match(
+        /^Chapitre\s+(\d+(?:[.,]\d+)?)\s*(?:(?:–|-|:)\s*)?(.*)$/i,
+      );
+      chapters.set(path, {
+        name: match
+          ? `${match[1]}${match[2] ? ` - ${match[2].trim()}` : ''}`
+          : title,
+        path,
+        ...(match ? { chapterNumber: Number(match[1].replace(',', '.')) } : {}),
+        releaseTime: post.date.slice(0, 10),
+      });
+    }
+
+    const totalPages = Number(postsResponse.headers.get('x-wp-totalpages'));
+    return {
+      chapters: [...chapters.values()],
+      totalPages:
+        Number.isInteger(totalPages) && totalPages > 0 ? totalPages : 1,
+    };
+  }
+
+  async parseNovel(
+    novelPath: string,
+  ): Promise<Plugin.SourceNovel & { totalPages: number }> {
+    const novel: Plugin.SourceNovel & { totalPages: number } = {
+      path: this.toPath(novelPath),
+      name: '',
+      totalPages: 1,
+    };
+
+    const $ = await this.getCheerio(this.site + novel.path);
 
     novel.name = $('h1.refresh-detail-title').first().text().trim();
     novel.cover = this.absoluteUrl(
@@ -177,38 +273,15 @@ class ChireadsPlugin implements Plugin.PluginBase {
       }
     });
 
-    novel.chapters = this.parseChapterItems($);
+    const firstPage = await this.chapterPage(novel.path, 1);
+    novel.chapters = firstPage.chapters;
+    novel.totalPages = firstPage.totalPages;
 
     return novel;
   }
 
-  private parseChapterItems($: CheerioAPI): Plugin.ChapterItem[] {
-    const chapters = new Map<string, Plugin.ChapterItem>();
-    $('.refresh-detail-chapter-list a').each((i, el) => {
-      const chapterUrl = $(el).attr('href');
-      if (!chapterUrl) return;
-      const path = this.compactChapterPath(chapterUrl);
-      if (!path || chapters.has(path)) return;
-      const name = $(el).text().trim();
-      const compactName = name.match(/^Chapitre\s+(\d+)\s*(?:–|-|:)\s*(.+)$/i);
-      const number = name.match(/\bchapitre\s+(\d+)/i)?.[1];
-      const date = new URL(chapterUrl, this.site).pathname.match(
-        /\/(\d{4})\/(\d{1,2})\/(\d{1,2})\/?$/,
-      );
-      chapters.set(path, {
-        name: compactName
-          ? `${compactName[1]} - ${compactName[2].trim()}`
-          : name,
-        path,
-        ...(number ? { chapterNumber: Number(number) } : {}),
-        ...(date
-          ? {
-              releaseTime: `${date[1]}-${date[2].padStart(2, '0')}-${date[3].padStart(2, '0')}`,
-            }
-          : {}),
-      });
-    });
-    return [...chapters.values()];
+  async parsePage(novelPath: string, page: string): Promise<Plugin.SourcePage> {
+    return this.chapterPage(novelPath, Number(page));
   }
 
   async parseChapter(chapterUrl: string): Promise<string> {

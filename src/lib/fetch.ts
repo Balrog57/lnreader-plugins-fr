@@ -54,6 +54,35 @@ export async function fetchApi(url: string, init?: FetchInit) {
   return await fetch(url, init as RequestInit);
 }
 
+const challengeTitles = new Set([
+  'bot verification',
+  'you are being redirected...',
+  'un instant...',
+  'just a moment...',
+  'redirecting...',
+]);
+
+export async function fetchHtmlChecked(
+  url: string,
+  init?: FetchInit,
+): Promise<string> {
+  const response = await fetchApi(url, init);
+  if (!response.ok)
+    throw new Error(`HTTP ${response.status} while loading ${url}`);
+
+  const html = await response.text();
+  const title = html
+    .match(/<title[^>]*>(.*?)<\/title>/is)?.[1]
+    ?.replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  if (title && challengeTitles.has(title))
+    throw new Error(`Bot challenge while loading ${url}`);
+
+  return html;
+}
+
 /**
  *
  * @param url

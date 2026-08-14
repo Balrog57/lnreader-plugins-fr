@@ -1,6 +1,6 @@
 import { Cheerio, CheerioAPI, load } from 'cheerio';
 import { Element } from 'domhandler';
-import { fetchApi } from '@libs/fetch';
+import { fetchHtmlChecked } from '@libs/fetch';
 import { Plugin } from '@/types/plugin';
 import { defaultCover } from '@libs/defaultCover';
 import { NovelStatus } from '@libs/novelStatus';
@@ -10,7 +10,7 @@ class XiaowazPlugin implements Plugin.PluginBase {
   name = 'Xiaowaz';
   icon = 'src/fr/xiaowaz/icon.png';
   site = 'https://xiaowaz.fr';
-  version = '1.0.3';
+  version = '1.0.4';
   static novels: Plugin.NovelItem[] | undefined;
 
   async getCheerio(url: string): Promise<CheerioAPI> {
@@ -18,10 +18,7 @@ class XiaowazPlugin implements Plugin.PluginBase {
     let returnError: unknown;
     while (retries > 0) {
       try {
-        const r = await fetchApi(url);
-        const body = await r.text();
-        const $ = load(body);
-        return $;
+        return load(await fetchHtmlChecked(url));
       } catch (error) {
         console.error(error);
         returnError = error;
