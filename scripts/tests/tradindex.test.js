@@ -83,7 +83,7 @@ test('Trad-Index lists and searches every tracked work type', async t => {
   );
   t.after(restore);
 
-  assert.equal(plugin.version, '1.0.6');
+  assert.equal(plugin.version, '1.0.7');
 
   const popular = await plugin.popularNovels(1, {});
   assert.deepEqual(

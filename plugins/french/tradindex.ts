@@ -5,14 +5,23 @@ import { NovelStatus } from '@libs/novelStatus';
 import { Plugin } from '@/types/plugin';
 
 const catalogueTypes = ['Web+Novel', 'Light+Novel', 'Manhwa'];
-const chapterPathPattern = /^\/oeuvre\/([^/?#]+)\/chapitre\/(\d+(?:[.,]\d+)?)/;
+const chapterPathPattern =
+  /^(?:https?:\/\/trad-index\.com)?\/oeuvre\/([^/?#]+)\/chapitre\/(\d+(?:[.,]\d+)?)/;
 
 class TradIndexPlugin implements Plugin.PluginBase {
   id = 'tradindex';
   name = 'Trad-Index';
   icon = 'src/fr/tradindex/icon.png';
   site = 'https://trad-index.com/';
-  version = '1.0.6';
+  version = '1.0.7';
+
+  // The app injects its own device User-Agent; send a desktop one so the
+  // server-rendered catalogue/chapter pages stay identical on mobile.
+  private readonly browserHeaders = {
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+  };
 
   resolveUrl(path: string, isNovel = false): string {
     const url = new URL(path, this.site);
@@ -44,7 +53,7 @@ class TradIndexPlugin implements Plugin.PluginBase {
     const attempts = retry ? 4 : 1;
     const url = new URL(path, this.site).href;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
-      const response = await fetchApi(url);
+      const response = await fetchApi(url, { headers: this.browserHeaders });
       if (response.ok) return response.text();
       if (
         !retry ||
@@ -73,9 +82,11 @@ class TradIndexPlugin implements Plugin.PluginBase {
   private parseCards(html: string): Plugin.NovelItem[] {
     const $ = load(html);
     const novels = new Map<string, Plugin.NovelItem>();
-    $('a[href^="/oeuvre/"]').each((_, element) => {
+    $('a[href]').each((_, element) => {
       const href = $(element).attr('href') || '';
-      const match = href.match(/^\/oeuvre\/([^/?#]+)\/?$/);
+      const match = href.match(
+        /^(?:https?:\/\/trad-index\.com)?\/oeuvre\/([^/?#]+)\/?$/,
+      );
       if (!match) return;
 
       const name = $(element)
@@ -102,7 +113,7 @@ class TradIndexPlugin implements Plugin.PluginBase {
   private chapterItems(html: string, slug: string): Plugin.ChapterItem[] {
     const $ = load(html);
     const chapters = new Map<string, Plugin.ChapterItem>();
-    $('a[href^="/oeuvre/"]').each((_, element) => {
+    $('a[href]').each((_, element) => {
       const href = $(element).attr('href') || '';
       const match = href.match(chapterPathPattern);
       if (!match || match[1] !== slug) return;
