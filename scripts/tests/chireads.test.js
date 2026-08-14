@@ -105,7 +105,7 @@ test('Chireads finds Panlong through translated novel categories', async t => {
       },
     ],
   );
-  assert.equal(plugin.version, '2.3.0');
+  assert.equal(plugin.version, '2.3.1');
 });
 
 test('Chireads loads the full chapter list across WordPress pages', async t => {

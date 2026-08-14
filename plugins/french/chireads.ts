@@ -27,7 +27,7 @@ class ChireadsPlugin implements Plugin.PluginBase {
   name = 'Chireads';
   icon = 'src/fr/chireads/icon.png';
   site = 'https://chireads.com';
-  version = '2.3.0';
+  version = '2.3.1';
 
   // The site is fronted by Cloudflare, which serves different HTML/JSON to a
   // plain device User-Agent (the mobile app injects its own UA via fetchApi)
@@ -36,14 +36,12 @@ class ChireadsPlugin implements Plugin.PluginBase {
   // chapter list survives on the app.
   private readonly browserHeaders = {
     Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Encoding': 'deflate',
     'User-Agent':
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
   };
 
   private readonly restHeaders = {
     Accept: 'application/json, */*;q=0.8',
-    'Accept-Encoding': 'deflate',
     'User-Agent': this.browserHeaders['User-Agent'],
   };
 
@@ -78,11 +76,12 @@ class ChireadsPlugin implements Plugin.PluginBase {
     const segments = parsed.pathname.split('/').filter(Boolean);
     if (segments[0] === 'c' && segments[1]) return `/c/${segments[1]}/`;
 
+    const last = (offset: number) => segments[segments.length - offset];
     const hasDateSuffix =
-      /^\d{4}$/.test(segments.at(-3) || '') &&
-      /^\d{1,2}$/.test(segments.at(-2) || '') &&
-      /^\d{1,2}$/.test(segments.at(-1) || '');
-    const chapterSlug = segments.at(hasDateSuffix ? -4 : -1);
+      /^\d{4}$/.test(last(3) || '') &&
+      /^\d{1,2}$/.test(last(2) || '') &&
+      /^\d{1,2}$/.test(last(1) || '');
+    const chapterSlug = last(hasDateSuffix ? 4 : 1);
     return chapterSlug ? `/c/${chapterSlug}/` : '';
   }
 
@@ -205,10 +204,8 @@ class ChireadsPlugin implements Plugin.PluginBase {
   }
 
   private async resolveCategory(path: string): Promise<number> {
-    const slug = new URL(path, this.site).pathname
-      .split('/')
-      .filter(Boolean)
-      .at(-1);
+    const parts = new URL(path, this.site).pathname.split('/').filter(Boolean);
+    const slug = parts[parts.length - 1];
     if (!slug) throw new Error('Invalid Chireads novel path');
 
     const categoryResponse = await this.restJson(
