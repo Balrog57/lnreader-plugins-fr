@@ -22,23 +22,33 @@ type WordPressPost = {
   title: { rendered: string };
 };
 
-class ChireadsPlugin implements Plugin.PagePlugin {
+class ChireadsPlugin implements Plugin.PluginBase {
   id = 'chireads';
   name = 'Chireads';
   icon = 'src/fr/chireads/icon.png';
   site = 'https://chireads.com';
-  version = '2.1.0';
+  version = '2.3.0';
+
+  // The site is fronted by Cloudflare, which serves different HTML/JSON to a
+  // plain device User-Agent (the mobile app injects its own UA via fetchApi)
+  // than to a desktop browser. Send the same desktop Chrome UA on every
+  // request — HTML pages and the wp-json REST endpoints alike — so a novel's
+  // chapter list survives on the app.
+  private readonly browserHeaders = {
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Encoding': 'deflate',
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+  };
+
+  private readonly restHeaders = {
+    Accept: 'application/json, */*;q=0.8',
+    'Accept-Encoding': 'deflate',
+    'User-Agent': this.browserHeaders['User-Agent'],
+  };
 
   async getCheerio(url: string): Promise<CheerioAPI> {
-    const r = await fetchApi(url, {
-      headers: {
-        Accept:
-          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Encoding': 'deflate',
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
-      },
-    });
+    const r = await fetchApi(url, { headers: this.browserHeaders });
     if (!r.ok) throw new Error(`HTTP ${r.status} while loading ${url}`);
     const body = await r.text();
     return load(body);
@@ -119,7 +129,26 @@ class ChireadsPlugin implements Plugin.PagePlugin {
           path: this.toPath(novelUrl),
         });
       });
-      return novels;
+
+      // The homepage "latest" table carries no cover images, only links to
+      // each novel's page. Resolve covers from the detail pages so the list
+      // shows a real cover instead of the "not available" placeholder.
+      const covers = await Promise.allSettled(
+        novels.map(async novel => {
+          const page = await this.getCheerio(this.site + novel.path);
+          const cover =
+            page('.refresh-detail-cover img').attr('src') ||
+            page('.refresh-detail-cover img').attr('data-src');
+          return cover ? this.absoluteUrl(cover) : defaultCover;
+        }),
+      );
+      return novels.map((novel, index) => ({
+        ...novel,
+        cover:
+          covers[index]?.status === 'fulfilled'
+            ? covers[index].value
+            : defaultCover,
+      }));
     }
 
     const tag = filters?.tag?.value;
@@ -163,26 +192,28 @@ class ChireadsPlugin implements Plugin.PagePlugin {
     return novels;
   }
 
-  private async chapterPage(
-    novelPath: string,
-    page: number,
-  ): Promise<Plugin.SourcePage & { totalPages: number }> {
-    if (!Number.isInteger(page) || page < 1) throw new Error('Invalid page');
+  private async restJson(url: string): Promise<Response> {
+    let lastStatus = 0;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const response = await fetchApi(url, { headers: this.restHeaders });
+      if (response.ok) return response;
+      lastStatus = response.status;
+      if (response.status !== 429 && response.status < 500) break;
+      await new Promise(resolve => setTimeout(resolve, 400 * (attempt + 1)));
+    }
+    throw new Error(`HTTP ${lastStatus} while loading ${url}`);
+  }
 
-    const path = this.toPath(novelPath);
+  private async resolveCategory(path: string): Promise<number> {
     const slug = new URL(path, this.site).pathname
       .split('/')
       .filter(Boolean)
       .at(-1);
     if (!slug) throw new Error('Invalid Chireads novel path');
 
-    const categoryResponse = await fetchApi(
+    const categoryResponse = await this.restJson(
       `${this.site}/wp-json/wp/v2/categories?slug=${encodeURIComponent(decodeURIComponent(slug))}&per_page=100&_fields=id,link,parent`,
     );
-    if (!categoryResponse.ok)
-      throw new Error(
-        `Category lookup failed with HTTP ${categoryResponse.status}`,
-      );
     const categoryData: unknown = await categoryResponse.json();
     if (!Array.isArray(categoryData))
       throw new Error('Category lookup returned invalid data');
@@ -196,12 +227,18 @@ class ChireadsPlugin implements Plugin.PagePlugin {
         this.toPath((item as WordPressNovelCategory).link) === path,
     );
     if (!category) throw new Error('Chireads novel category not found');
+    return category.id;
+  }
 
-    const postsResponse = await fetchApi(
-      `${this.site}/wp-json/wp/v2/posts?categories=${category.id}&per_page=100&page=${page}&orderby=date&order=asc&_fields=slug,title,date`,
+  private async fetchChapterPage(
+    categoryId: number,
+    page: number,
+  ): Promise<Plugin.SourcePage & { totalPages: number }> {
+    if (!Number.isInteger(page) || page < 1) throw new Error('Invalid page');
+
+    const postsResponse = await this.restJson(
+      `${this.site}/wp-json/wp/v2/posts?categories=${categoryId}&per_page=100&page=${page}&orderby=date&order=asc&_fields=slug,title,date`,
     );
-    if (!postsResponse.ok)
-      throw new Error(`Chapter page failed with HTTP ${postsResponse.status}`);
     const postData: unknown = await postsResponse.json();
     if (
       !Array.isArray(postData) ||
@@ -241,13 +278,22 @@ class ChireadsPlugin implements Plugin.PagePlugin {
     };
   }
 
-  async parseNovel(
-    novelPath: string,
-  ): Promise<Plugin.SourceNovel & { totalPages: number }> {
-    const novel: Plugin.SourceNovel & { totalPages: number } = {
+  private async allChapters(novelPath: string): Promise<Plugin.ChapterItem[]> {
+    const categoryId = await this.resolveCategory(this.toPath(novelPath));
+    const first = await this.fetchChapterPage(categoryId, 1);
+    const chapters = new Map<string, Plugin.ChapterItem>();
+    for (const chapter of first.chapters) chapters.set(chapter.path, chapter);
+    for (let page = 2; page <= first.totalPages; page++) {
+      const next = await this.fetchChapterPage(categoryId, page);
+      for (const chapter of next.chapters) chapters.set(chapter.path, chapter);
+    }
+    return [...chapters.values()];
+  }
+
+  async parseNovel(novelPath: string): Promise<Plugin.SourceNovel> {
+    const novel: Plugin.SourceNovel = {
       path: this.toPath(novelPath),
       name: '',
-      totalPages: 1,
     };
 
     const $ = await this.getCheerio(this.site + novel.path);
@@ -273,15 +319,9 @@ class ChireadsPlugin implements Plugin.PagePlugin {
       }
     });
 
-    const firstPage = await this.chapterPage(novel.path, 1);
-    novel.chapters = firstPage.chapters;
-    novel.totalPages = firstPage.totalPages;
+    novel.chapters = await this.allChapters(novel.path);
 
     return novel;
-  }
-
-  async parsePage(novelPath: string, page: string): Promise<Plugin.SourcePage> {
-    return this.chapterPage(novelPath, Number(page));
   }
 
   async parseChapter(chapterUrl: string): Promise<string> {
@@ -308,6 +348,7 @@ class ChireadsPlugin implements Plugin.PagePlugin {
       [2, 811].map(async parent => {
         const response = await fetchApi(
           `${this.site}/wp-json/wp/v2/categories?parent=${parent}&search=${encodeURIComponent(searchTerm)}&per_page=100&page=${pageNo}`,
+          { headers: this.restHeaders },
         );
         if (!response.ok) throw new Error(`Search parent ${parent} failed`);
         const categories: unknown = await response.json();

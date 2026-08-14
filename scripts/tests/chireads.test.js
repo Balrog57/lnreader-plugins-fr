@@ -105,10 +105,10 @@ test('Chireads finds Panlong through translated novel categories', async t => {
       },
     ],
   );
-  assert.equal(plugin.version, '2.1.0');
+  assert.equal(plugin.version, '2.3.0');
 });
 
-test('Chireads pages large chapter lists through WordPress', async t => {
+test('Chireads loads the full chapter list across WordPress pages', async t => {
   const largePath = '/category/translatedtales/large-series/';
   const posts = Array.from({ length: 205 }, (_, index) => ({
     date: `2026-01-${String((index % 28) + 1).padStart(2, '0')}T17:00:00`,
@@ -147,19 +147,12 @@ test('Chireads pages large chapter lists through WordPress', async t => {
   );
   t.after(restore);
 
-  const firstPage = await plugin.parseNovel(largePath);
-  assert.equal(firstPage.totalPages, 3);
-  assert.equal(firstPage.chapters.length, 100);
-  assert.equal(firstPage.chapters[0].path, '/c/chapitre-1/');
-  const chapters = [
-    ...firstPage.chapters,
-    ...(await plugin.parsePage(largePath, '2')).chapters,
-    ...(await plugin.parsePage(largePath, '3')).chapters,
-  ];
-  assert.equal(chapters.length, 205);
-  assert.equal(new Set(chapters.map(chapter => chapter.path)).size, 205);
-  assert.equal(chapters[100].path, '/c/chapitre-101/');
-  assert.equal(chapters.at(-1).path, '/c/chapitre-205/');
+  const novel = await plugin.parseNovel(largePath);
+  assert.equal(novel.chapters.length, 205);
+  assert.equal(novel.chapters[0].path, '/c/chapitre-1/');
+  assert.equal(novel.chapters[100].path, '/c/chapitre-101/');
+  assert.equal(novel.chapters.at(-1).path, '/c/chapitre-205/');
+  assert.equal(new Set(novel.chapters.map(chapter => chapter.path)).size, 205);
 });
 
 test('Chireads search also finds original novels', async t => {
