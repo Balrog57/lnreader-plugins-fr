@@ -24,7 +24,7 @@ class LightNovelVFPlugin implements Plugin.PagePlugin {
   name = 'LightNovelVF';
   icon = 'src/fr/lightnovelvf/icon.png';
   site = 'https://www.lightnovelvf.com/';
-  version = '1.0.3';
+  version = '1.0.4';
 
   resolveUrl(path: string, _isNovel = false): string {
     void _isNovel;
@@ -171,11 +171,15 @@ class LightNovelVFPlugin implements Plugin.PagePlugin {
     return Array.from(novels.values());
   }
 
-  private catalogueUrl(pageNo: number, searchTerm?: string): string {
-    const query = searchTerm
-      ? `?page=${pageNo}&search=${encodeURIComponent(searchTerm)}`
-      : `?page=${pageNo}`;
-    return new URL(`/novels-list${query}`, this.site).toString();
+  private catalogueUrl(
+    pageNo: number,
+    searchTerm?: string,
+    latest = false,
+  ): string {
+    const parts = [`page=${pageNo}`];
+    if (searchTerm) parts.push(`search=${encodeURIComponent(searchTerm)}`);
+    if (latest) parts.push('sort=update', 'sort_dir=desc');
+    return new URL(`/novels-list?${parts.join('&')}`, this.site).toString();
   }
 
   private labelledValue(html: string, label: string): string | undefined {
@@ -188,8 +192,15 @@ class LightNovelVFPlugin implements Plugin.PagePlugin {
     return value;
   }
 
-  async popularNovels(pageNo: number): Promise<Plugin.NovelItem[]> {
-    return this.parseCards(await this.fetchHtml(this.catalogueUrl(pageNo)));
+  async popularNovels(
+    pageNo: number,
+    { showLatestNovels }: Plugin.PopularNovelsOptions,
+  ): Promise<Plugin.NovelItem[]> {
+    return this.parseCards(
+      await this.fetchHtml(
+        this.catalogueUrl(pageNo, undefined, Boolean(showLatestNovels)),
+      ),
+    );
   }
 
   async searchNovels(
