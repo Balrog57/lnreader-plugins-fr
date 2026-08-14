@@ -251,7 +251,7 @@ test('LightNovelVF parses metadata, paginated JSON chapters, and readable conten
   assert.equal(plugin.name, 'LightNovelVF');
   assert.equal(plugin.icon, 'src/fr/lightnovelvf/icon.png');
   assert.equal(plugin.site, 'https://www.lightnovelvf.com/');
-  assert.equal(plugin.version, '1.0.2');
+  assert.equal(plugin.version, '1.0.3');
 
   const novel = await plugin.parseNovel('supreme-magus');
   assert.equal(novel.name, 'Supreme Magus');
@@ -275,15 +275,21 @@ test('LightNovelVF parses metadata, paginated JSON chapters, and readable conten
   );
   assert.deepEqual(
     novel.chapters.map(chapter => chapter.chapterNumber),
-    [114, 115],
+    [114],
   );
   assert.deepEqual(
     novel.chapters.map(chapter => chapter.name),
-    ['Leçon', 'Second lesson'],
+    ['Leçon'],
   );
   assert.deepEqual(
     novel.chapters.map(chapter => chapter.releaseTime),
-    ['2026-06-16T00:15:40.000000Z', '2026-06-17T00:15:40.000000Z'],
+    ['2026-06-16T00:15:40.000000Z'],
+  );
+  assert.equal(novel.totalPages, 2);
+  const secondPage = await plugin.parsePage('supreme-magus', '2');
+  assert.deepEqual(
+    secondPage.chapters.map(chapter => chapter.chapterNumber),
+    [115],
   );
   assert.ok(
     requests.includes('/novel/supreme-magus/chapitres?p=1&order=asc&q='),
@@ -327,9 +333,17 @@ test('LightNovelVF retries a throttled chapter page', async t => {
   );
   t.after(restore);
 
+  const novel = await plugin.parseNovel('retry-novel');
   assert.deepEqual(
-    (await plugin.parseNovel('retry-novel')).chapters.map(c => c.chapterNumber),
-    [1, 2],
+    novel.chapters.map(c => c.chapterNumber),
+    [1],
+  );
+  assert.equal(novel.totalPages, 2);
+  assert.deepEqual(
+    (await plugin.parsePage('retry-novel', '2')).chapters.map(
+      c => c.chapterNumber,
+    ),
+    [2],
   );
 });
 
@@ -340,11 +354,56 @@ test('LightNovelVF retries a transient server-error chapter page', async t => {
   );
   t.after(restore);
 
+  const novel = await plugin.parseNovel('server-error-novel');
   assert.deepEqual(
-    (await plugin.parseNovel('server-error-novel')).chapters.map(
+    novel.chapters.map(c => c.chapterNumber),
+    [1],
+  );
+  assert.deepEqual(
+    (await plugin.parsePage('server-error-novel', '2')).chapters.map(
       c => c.chapterNumber,
     ),
-    [1, 2],
+    [2],
+  );
+});
+
+test('LightNovelVF retries a chapter page after a network failure', async t => {
+  let networkFailures = 0;
+  const base = chapterFixtureFetch('network-retry', pageNo => ({
+    chapters: [
+      { number: String(pageNo), slug: String(pageNo), name: `Page ${pageNo}` },
+    ],
+    current_page: pageNo,
+    last_page: 2,
+    total: 2,
+  }));
+  const source = {
+    fetch(url) {
+      if (String(url).includes('p=2') && networkFailures++ === 0)
+        return Promise.reject(new TypeError('fetch failed'));
+      return base.fetch(url);
+    },
+    get requests() {
+      return base.requests;
+    },
+  };
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/lightnovelvf.ts',
+    source.fetch,
+  );
+  t.after(restore);
+
+  assert.deepEqual(
+    (await plugin.parseNovel('network-retry')).chapters.map(
+      chapter => chapter.chapterNumber,
+    ),
+    [1],
+  );
+  assert.deepEqual(
+    (await plugin.parsePage('network-retry', '2')).chapters.map(
+      chapter => chapter.chapterNumber,
+    ),
+    [2],
   );
 });
 
@@ -355,10 +414,74 @@ test('LightNovelVF requests every server-declared chapter page', async t => {
   );
   t.after(restore);
 
-  await plugin.parseNovel('long-novel');
+  const novel = await plugin.parseNovel('long-novel');
+  assert.equal(novel.totalPages, 501);
+  assert.ok(
+    !requests.includes('/novel/long-novel/chapitres?p=501&order=asc&q='),
+  );
+  await plugin.parsePage('long-novel', '501');
   assert.ok(
     requests.includes('/novel/long-novel/chapitres?p=501&order=asc&q='),
   );
+});
+
+test('LightNovelVF paginates chapters on demand in reading order', async t => {
+  const source = chapterFixtureFetch('batched', pageNo => ({
+    chapters: [
+      { number: String(pageNo), slug: String(pageNo), name: `Page ${pageNo}` },
+    ],
+    current_page: pageNo,
+    last_page: 12,
+    total: 12,
+  }));
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/lightnovelvf.ts',
+    source.fetch,
+  );
+  t.after(restore);
+
+  const novel = await plugin.parseNovel('batched');
+  assert.equal(novel.totalPages, 12);
+  assert.deepEqual(
+    novel.chapters.map(chapter => chapter.chapterNumber),
+    [1],
+  );
+  const lastPage = await plugin.parsePage('batched', '12');
+  assert.deepEqual(
+    lastPage.chapters.map(chapter => chapter.chapterNumber),
+    [12],
+  );
+  await assert.rejects(plugin.parsePage('batched', '0'), /Invalid page/);
+  await assert.rejects(plugin.parsePage('batched', '1.5'), /Invalid page/);
+});
+
+test('LightNovelVF fails the page when it stays down after retries', async t => {
+  const source = chapterFixtureFetch('broken-batch', pageNo =>
+    pageNo === 3
+      ? new Response('Unavailable', {
+          status: 503,
+          headers: { 'retry-after': '0' },
+        })
+      : {
+          chapters: [
+            {
+              number: String(pageNo),
+              slug: String(pageNo),
+              name: `Page ${pageNo}`,
+            },
+          ],
+          current_page: pageNo,
+          last_page: 5,
+          total: 5,
+        },
+  );
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/lightnovelvf.ts',
+    source.fetch,
+  );
+  t.after(restore);
+
+  await assert.rejects(plugin.parsePage('broken-batch', '3'), /Failed to load/);
 });
 
 test('LightNovelVF rejects a chapter response for the wrong requested page', async t => {

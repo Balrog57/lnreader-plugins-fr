@@ -19,12 +19,12 @@ type ChapterPage = {
   total: number;
 };
 
-class LightNovelVFPlugin implements Plugin.PluginBase {
+class LightNovelVFPlugin implements Plugin.PagePlugin {
   id = 'lightnovelvf';
   name = 'LightNovelVF';
   icon = 'src/fr/lightnovelvf/icon.png';
   site = 'https://www.lightnovelvf.com/';
-  version = '1.0.2';
+  version = '1.0.3';
 
   resolveUrl(path: string, _isNovel = false): string {
     void _isNovel;
@@ -43,11 +43,11 @@ class LightNovelVFPlugin implements Plugin.PluginBase {
     return response.text();
   }
 
-  private retryDelay(response: Response, attempt: number): number {
-    const retryAfter = response.headers.get('retry-after');
+  private retryDelay(response: Response | null, attempt: number): number {
+    const retryAfter = response?.headers.get('retry-after');
     if (retryAfter) {
       const seconds = Number(retryAfter);
-      if (Number.isFinite(seconds)) return Math.max(seconds, 0) * 1000;
+      if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
       const date = Date.parse(retryAfter);
       if (!Number.isNaN(date)) return Math.max(date - Date.now(), 0);
     }
@@ -101,7 +101,16 @@ class LightNovelVFPlugin implements Plugin.PluginBase {
     requestedPage: number,
   ): Promise<ChapterPage> {
     for (let attempt = 0; attempt < 6; attempt += 1) {
-      const response = await fetchApi(url);
+      let response: Response;
+      try {
+        response = await fetchApi(url);
+      } catch {
+        if (attempt === 5) throw new Error(`Failed to load ${url}`);
+        await new Promise(resolve =>
+          setTimeout(resolve, this.retryDelay(null, attempt)),
+        );
+        continue;
+      }
       if (
         (response.status === 429 ||
           (response.status >= 500 && response.status < 600)) &&
@@ -193,7 +202,30 @@ class LightNovelVFPlugin implements Plugin.PluginBase {
     );
   }
 
-  async parseNovel(novelPath: string): Promise<Plugin.SourceNovel> {
+  private chapterItems(page: ChapterPage, slug: string): Plugin.ChapterItem[] {
+    const chapters = new Map<string, Plugin.ChapterItem>();
+    for (const chapter of page.chapters) {
+      const chapterNumber = Number(chapter.number);
+      if (!chapter.slug || !Number.isFinite(chapterNumber)) continue;
+      chapters.set(chapter.slug, {
+        name: chapter.name_fr || chapter.name || `Chapitre ${chapter.number}`,
+        path: `${slug}/${chapter.slug}`,
+        chapterNumber,
+        releaseTime: chapter.created_at || null,
+      });
+    }
+    return Array.from(chapters.values()).sort(
+      (left, right) => (left.chapterNumber || 0) - (right.chapterNumber || 0),
+    );
+  }
+
+  private chapterPageUrl(slug: string, pageNo: number): string {
+    return `${this.resolveUrl(`${slug}/chapitres`, true)}?p=${pageNo}&order=asc&q=`;
+  }
+
+  async parseNovel(
+    novelPath: string,
+  ): Promise<Plugin.SourceNovel & { totalPages: number }> {
     const novelUrl = this.resolveUrl(novelPath, true);
     const slug = new URL(novelUrl).pathname.replace(/^\/novel\//, '');
     const html = await this.fetchHtml(novelUrl);
@@ -210,32 +242,9 @@ class LightNovelVFPlugin implements Plugin.PluginBase {
         .text()
         .trim();
     const firstPage = await this.fetchChapterPage(
-      `${this.resolveUrl(`${slug}/chapitres`, true)}?p=1&order=asc&q=`,
+      this.chapterPageUrl(slug, 1),
       1,
     );
-    let lastPage = Math.max(firstPage.current_page, firstPage.last_page, 1);
-    const pages = [firstPage];
-    for (let pageNo = 2; pageNo <= lastPage; pageNo += 1) {
-      const page = await this.fetchChapterPage(
-        `${this.resolveUrl(`${slug}/chapitres`, true)}?p=${pageNo}&order=asc&q=`,
-        pageNo,
-      );
-      pages.push(page);
-      lastPage = Math.max(page.current_page, page.last_page, 1);
-    }
-    const chapters = new Map<string, Plugin.ChapterItem>();
-    for (const page of pages) {
-      for (const chapter of page.chapters) {
-        const chapterNumber = Number(chapter.number);
-        if (!chapter.slug || !Number.isFinite(chapterNumber)) continue;
-        chapters.set(chapter.slug, {
-          name: chapter.name_fr || chapter.name || `Chapitre ${chapter.number}`,
-          path: `${slug}/${chapter.slug}`,
-          chapterNumber,
-          releaseTime: chapter.created_at || null,
-        });
-      }
-    }
 
     const cover =
       $('.lnv-novel-cover, .lnv-novel__cover, .lnv-hero img, .hero img')
@@ -266,10 +275,22 @@ class LightNovelVFPlugin implements Plugin.PluginBase {
           : /cours|ongoing/i.test(statusText)
             ? NovelStatus.Ongoing
             : NovelStatus.Unknown,
-      chapters: Array.from(chapters.values()).sort(
-        (left, right) => (left.chapterNumber || 0) - (right.chapterNumber || 0),
-      ),
+      chapters: this.chapterItems(firstPage, slug),
+      totalPages: Math.max(firstPage.last_page, 1),
     };
+  }
+
+  async parsePage(novelPath: string, page: string): Promise<Plugin.SourcePage> {
+    const pageNo = Number(page);
+    if (!Number.isInteger(pageNo) || pageNo < 1)
+      throw new Error('Invalid page');
+    const novelUrl = this.resolveUrl(novelPath, true);
+    const slug = new URL(novelUrl).pathname.replace(/^\/novel\//, '');
+    const pageData = await this.fetchChapterPage(
+      this.chapterPageUrl(slug, pageNo),
+      pageNo,
+    );
+    return { chapters: this.chapterItems(pageData, slug) };
   }
 
   async parseChapter(chapterPath: string): Promise<string> {
