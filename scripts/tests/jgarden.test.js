@@ -16,6 +16,12 @@ const fixtures = {
   '/wp-json/wp/v2/pages?slug=jg-web-novel&_fields=content': [
     { content: { rendered: '<a href="/orv/">Omniscient Reader</a>' } },
   ],
+  '/wp-json/wp/v2/pages?slug=love-unseen&_fields=content': [
+    { content: { rendered: '<img src="/cover.webp">' } },
+  ],
+  '/wp-json/wp/v2/pages?slug=orv&_fields=content': [
+    { content: { rendered: '<img src="/orv.webp">' } },
+  ],
   '/wp-json/wp/v2/pages?slug=love-unseen&_fields=slug,link,title,content': [
     {
       slug: 'love-unseen',
@@ -70,13 +76,13 @@ test('J-Garden lists, searches, and parses its public WordPress catalogue', asyn
   t.after(restore);
 
   const popular = await plugin.popularNovels(1);
-  assert.equal(plugin.version, '1.0.3');
+  assert.equal(plugin.version, '1.0.5');
   assert.deepEqual(
     popular.map(novel => novel.path),
     ['love-unseen', 'orv'],
   );
   assert.equal(popular[0].name, 'Love Unseen');
-  assert.equal(popular[0].cover, 'https://j-garden.fr/love-unseen.webp');
+  assert.equal(popular[0].cover, 'https://j-garden.fr/cover.webp');
 
   const novel = await plugin.parseNovel('love-unseen');
   assert.equal(novel.name, 'Love Unseen');

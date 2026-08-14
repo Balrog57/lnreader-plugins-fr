@@ -19,7 +19,7 @@ class JGardenPlugin implements Plugin.PluginBase {
   name = 'J-Garden';
   icon = 'src/fr/jgarden/icon.png';
   site = 'https://j-garden.fr/';
-  version = '1.0.3';
+  version = '1.0.5';
 
   resolveUrl(path: string): string {
     const url = new URL(path, this.site);
@@ -58,15 +58,49 @@ class JGardenPlugin implements Plugin.PluginBase {
         $(element).text().trim() ||
         image.attr('alt')?.trim() ||
         this.nameFromSlug(path || '');
-      const cover = image.attr('src');
-      if (path && name)
-        novels.set(path, {
-          name,
-          path,
-          cover: cover ? this.resolveUrl(cover) : defaultCover,
-        });
+      const coverSrc = image.attr('src');
+      const width = Number(image.attr('width'));
+      const height = Number(image.attr('height'));
+      // The catalogue renders wide series banners (e.g. 2567×487), not the
+      // portrait book covers. A landscape image zoomed into a portrait card
+      // looks broken, so fall back to the default cover instead.
+      const isBanner =
+        Number.isFinite(width) && Number.isFinite(height) && width > height;
+      const cover =
+        coverSrc && !isBanner ? this.resolveUrl(coverSrc) : defaultCover;
+      if (path && name) novels.set(path, { name, path, cover });
     });
     return Array.from(novels.values());
+  }
+
+  // The catalogue only carries wide series banners; the actual portrait book
+  // cover lives on each novel's own page. Fetch it there so the list shows a
+  // real cover instead of a zoomed banner or the fallback placeholder.
+  private async fetchCover(slug: string): Promise<string> {
+    try {
+      const pages = await this.getJson<{ content: { rendered: string } }[]>(
+        `/wp-json/wp/v2/pages?slug=${encodeURIComponent(slug)}&_fields=content`,
+      );
+      const content = pages[0]?.content?.rendered;
+      if (!content) return defaultCover;
+      const $ = load(content);
+      let cover = '';
+      $('img').each((_, element) => {
+        if (cover) return;
+        const src = $(element).attr('src');
+        if (!src) return;
+        const width = Number($(element).attr('width'));
+        const height = Number($(element).attr('height'));
+        const portrait =
+          !Number.isFinite(width) ||
+          !Number.isFinite(height) ||
+          height >= width;
+        if (portrait) cover = this.resolveUrl(src);
+      });
+      return cover || defaultCover;
+    } catch {
+      return defaultCover;
+    }
   }
 
   private nameFromSlug(slug: string): string {
@@ -138,7 +172,17 @@ class JGardenPlugin implements Plugin.PluginBase {
         novels.set(novel.path, novel);
       }
     }
-    return Array.from(novels.values());
+    const list = Array.from(novels.values());
+    const covers = await Promise.allSettled(
+      list.map(novel => this.fetchCover(novel.path)),
+    );
+    return list.map((novel, index) => ({
+      ...novel,
+      cover:
+        covers[index]?.status === 'fulfilled'
+          ? covers[index].value
+          : defaultCover,
+    }));
   }
 
   async parseNovel(novelPath: string): Promise<Plugin.SourceNovel> {
