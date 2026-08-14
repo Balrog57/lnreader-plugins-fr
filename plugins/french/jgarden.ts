@@ -19,7 +19,7 @@ class JGardenPlugin implements Plugin.PluginBase {
   name = 'J-Garden';
   icon = 'src/fr/jgarden/icon.png';
   site = 'https://j-garden.fr/';
-  version = '1.0.2';
+  version = '1.0.3';
 
   resolveUrl(path: string): string {
     const url = new URL(path, this.site);
@@ -80,7 +80,7 @@ class JGardenPlugin implements Plugin.PluginBase {
   private chapterSequence(name: string, path: string) {
     const source = `${name} ${path}`;
     const volume = Number(
-      source.match(/(?:tome|volume|vol\.?|t)[\s_-]*(\d+)/i)?.[1] || 0,
+      source.match(/(?:tome|volume|vol\.?|v|t)[\s_-]*(\d+)/i)?.[1] || 0,
     );
     // Within each volume: preface, prologue, numbered chapters, interlude,
     // bonus, epilogue, then postface. Unrecognised links retain DOM order.
@@ -196,27 +196,34 @@ class JGardenPlugin implements Plugin.PluginBase {
         : defaultCover,
       summary: firstChapter.prevAll().text().trim(),
       status,
-      chapters: Array.from(chapters.values())
-        .sort((left, right) => {
-          const leftSequence = this.chapterSequence(
-            left.chapter.name,
-            left.chapter.path,
-          );
-          const rightSequence = this.chapterSequence(
-            right.chapter.name,
-            right.chapter.path,
-          );
+      chapters: (() => {
+        const items = Array.from(chapters.values()).map(entry => ({
+          ...entry,
+          sequence: this.chapterSequence(
+            entry.chapter.name,
+            entry.chapter.path,
+          ),
+        }));
+        // When only some chapters carry a volume marker (e.g. v1/v2 books
+        // alongside untagged side stories), the site's DOM order is the
+        // reading order; keep it instead of interleaving by chapter number.
+        const mixedVolumes =
+          items.some(item => item.sequence.volume > 0) &&
+          items.some(item => item.sequence.volume === 0);
+        items.sort((left, right) => {
+          if (mixedVolumes) return left.index - right.index;
           return (
-            leftSequence.volume - rightSequence.volume ||
-            leftSequence.kind - rightSequence.kind ||
-            leftSequence.chapter - rightSequence.chapter ||
+            left.sequence.volume - right.sequence.volume ||
+            left.sequence.kind - right.sequence.kind ||
+            left.sequence.chapter - right.sequence.chapter ||
             left.index - right.index
           );
-        })
-        .map(({ chapter }, index) => ({
+        });
+        return items.map(({ chapter }, index) => ({
           ...chapter,
           chapterNumber: index + 1,
-        })),
+        }));
+      })(),
     };
   }
 

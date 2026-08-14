@@ -37,6 +37,18 @@ const fixtures = {
         },
       },
     ],
+  '/wp-json/wp/v2/pages?slug=violet-evergarden&_fields=slug,link,title,content':
+    [
+      {
+        slug: 'violet-evergarden',
+        link: 'https://j-garden.fr/violet-evergarden/',
+        title: { rendered: 'Violet Evergarden' },
+        content: {
+          rendered:
+            '<img src="/ve.webp"><p>Statut : Terminé</p><a href="/violet-ever-v1-preface/">Préface</a><a href="/violet-ever-v1-chapitre-1/">Chapitre 1</a><a href="/violet-ever-v1-postface/">Postface</a><a href="/violet-ever-v2-preface/">Préface</a><a href="/violet-ever-v2-prologue/">Prologue</a><a href="/violet-ever-v2-chapitre-7/">Chapitre 7</a><a href="/ve-gaiden-chapitre-1/">Chapitre 1</a><a href="/ve-gaiden-postface/">Postface</a><a href="/ve-ever-after-prologue/">Prologue</a><a href="/ve-ever-after-chapitre-1/">Chapitre 1</a><a href="/ve-ever-after-postface/">Postface</a>',
+        },
+      },
+    ],
 };
 
 function fixtureFetch(url) {
@@ -58,7 +70,7 @@ test('J-Garden lists, searches, and parses its public WordPress catalogue', asyn
   t.after(restore);
 
   const popular = await plugin.popularNovels(1);
-  assert.equal(plugin.version, '1.0.2');
+  assert.equal(plugin.version, '1.0.3');
   assert.deepEqual(
     popular.map(novel => novel.path),
     ['love-unseen', 'orv'],
@@ -103,6 +115,36 @@ test('J-Garden assigns monotone chapter numbers after special-order sorting', as
   assert.deepEqual(
     novel.chapters.map(chapter => chapter.chapterNumber),
     [1, 2, 3, 4, 5, 6, 7, 8, 9],
+  );
+});
+
+test('J-Garden keeps site order when volumes are only partially tagged', async t => {
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/jgarden.ts',
+    fixtureFetch,
+  );
+  t.after(restore);
+
+  const novel = await plugin.parseNovel('violet-evergarden');
+  assert.deepEqual(
+    novel.chapters.map(chapter => chapter.path),
+    [
+      'violet-ever-v1-preface',
+      'violet-ever-v1-chapitre-1',
+      'violet-ever-v1-postface',
+      'violet-ever-v2-preface',
+      'violet-ever-v2-prologue',
+      'violet-ever-v2-chapitre-7',
+      've-gaiden-chapitre-1',
+      've-gaiden-postface',
+      've-ever-after-prologue',
+      've-ever-after-chapitre-1',
+      've-ever-after-postface',
+    ],
+  );
+  assert.deepEqual(
+    novel.chapters.map(chapter => chapter.chapterNumber),
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
   );
 });
 
