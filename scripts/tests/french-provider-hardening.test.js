@@ -60,7 +60,7 @@ test('KissWood keeps moved chapters and slices promotional separators', async t 
   );
   t.after(restore);
 
-  assert.equal(plugin.version, '1.0.2');
+  assert.equal(plugin.version, '1.0.3');
   const current = await plugin.parseChapter('/chapitre-courant/');
   assert.match(current, /Contenu lisible/);
   assert.doesNotMatch(current, /Avant|Après/);
@@ -134,7 +134,7 @@ test('WuxiaLnScanTrad uses Unknown, ISO dates and unique chapter paths', async t
   t.after(restore);
 
   const novel = await plugin.parseNovel('/serie/');
-  assert.equal(plugin.version, '1.0.3');
+  assert.equal(plugin.version, '1.0.4');
   assert.equal(novel.status, 'Unknown');
   assert.equal(novel.chapters.length, 1);
   assert.equal(novel.chapters[0].releaseTime, '2026-08-14');
@@ -177,7 +177,7 @@ test('Re:Zero keeps duplicate paths out and does not invent a status', async t =
   t.after(restore);
 
   const novel = await plugin.parseNovel('/if-stories/');
-  assert.equal(plugin.version, '1.0.2');
+  assert.equal(plugin.version, '1.0.3');
   assert.equal(novel.status, 'Unknown');
   assert.equal(novel.chapters.length, 1);
 });

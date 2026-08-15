@@ -1,15 +1,42 @@
 import { CheerioAPI, load } from 'cheerio';
-import { fetchApi, fetchHtmlChecked } from '@libs/fetch';
+import { fetchApi } from '@libs/fetch';
 import { Plugin } from '@/types/plugin';
 import { defaultCover } from '@libs/defaultCover';
 import { NovelStatus } from '@libs/novelStatus';
+
+const challengeTitles = new Set([
+  'bot verification',
+  'you are being redirected...',
+  'un instant...',
+  'just a moment...',
+  'redirecting...',
+]);
+
+async function fetchCheckedHtml(
+  url: string,
+  init?: Parameters<typeof fetchApi>[1],
+): Promise<string> {
+  const response = await fetchApi(url, init);
+  if (!response.ok)
+    throw new Error(`HTTP ${response.status} while loading ${url}`);
+  const html = await response.text();
+  const title = html
+    .match(/<title[^>]*>(.*?)<\/title>/is)?.[1]
+    ?.replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  if (title && challengeTitles.has(title))
+    throw new Error(`Bot challenge while loading ${url}`);
+  return html;
+}
 
 class KissWoodPlugin implements Plugin.PluginBase {
   id = 'kisswood';
   name = 'KissWood';
   icon = 'src/fr/kisswood/icon.png';
   site = 'https://kisswood.eu';
-  version = '1.0.2';
+  version = '1.0.3';
 
   private async findMovedChapter(chapterPath: string): Promise<string | null> {
     const slug = chapterPath.split('/').filter(Boolean).pop() || '';
@@ -35,7 +62,7 @@ class KissWoodPlugin implements Plugin.PluginBase {
   }
 
   async getCheerio(url: string): Promise<CheerioAPI> {
-    return load(await fetchHtmlChecked(url));
+    return load(await fetchCheckedHtml(url));
   }
 
   async getNovelsCovers(
@@ -203,11 +230,11 @@ class KissWoodPlugin implements Plugin.PluginBase {
   async parseChapter(chapterPath: string): Promise<string> {
     let body: string;
     try {
-      body = await fetchHtmlChecked(this.site + chapterPath);
+      body = await fetchCheckedHtml(this.site + chapterPath);
     } catch (error) {
       const replacement = await this.findMovedChapter(chapterPath);
       if (!replacement) throw error;
-      body = await fetchHtmlChecked(replacement);
+      body = await fetchCheckedHtml(replacement);
     }
 
     const $ = load(body);

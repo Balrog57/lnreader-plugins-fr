@@ -1,16 +1,43 @@
 import { CheerioAPI, load } from 'cheerio';
-import { fetchApi, fetchHtmlChecked } from '@libs/fetch';
+import { fetchApi } from '@libs/fetch';
 import { Plugin } from '@/types/plugin';
 import { defaultCover } from '@libs/defaultCover';
 import { NovelStatus } from '@libs/novelStatus';
 import dayjs from 'dayjs';
+
+const challengeTitles = new Set([
+  'bot verification',
+  'you are being redirected...',
+  'un instant...',
+  'just a moment...',
+  'redirecting...',
+]);
+
+async function fetchCheckedHtml(
+  url: string,
+  init?: Parameters<typeof fetchApi>[1],
+): Promise<string> {
+  const response = await fetchApi(url, init);
+  if (!response.ok)
+    throw new Error(`HTTP ${response.status} while loading ${url}`);
+  const html = await response.text();
+  const title = html
+    .match(/<title[^>]*>(.*?)<\/title>/is)?.[1]
+    ?.replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  if (title && challengeTitles.has(title))
+    throw new Error(`Bot challenge while loading ${url}`);
+  return html;
+}
 
 class WuxialnscantradPlugin implements Plugin.PluginBase {
   id = 'wuxialnscantrad';
   name = 'WuxiaLnScantrad';
   icon = 'src/fr/wuxialnscantrad/icon.png';
   site = 'https://wuxialnscantrad.wordpress.com';
-  version = '1.0.3';
+  version = '1.0.4';
 
   private async findMovedChapter(chapterPath: string): Promise<string | null> {
     const slug = chapterPath.split('/').filter(Boolean).pop() || '';
@@ -38,7 +65,7 @@ class WuxialnscantradPlugin implements Plugin.PluginBase {
 
   async getCheerio(url: string): Promise<CheerioAPI> {
     return load(
-      await fetchHtmlChecked(url, {
+      await fetchCheckedHtml(url, {
         headers: { 'Accept-Encoding': 'deflate' },
       }),
     );
@@ -190,11 +217,11 @@ class WuxialnscantradPlugin implements Plugin.PluginBase {
     const options = { headers: { 'Accept-Encoding': 'deflate' } };
     let body: string;
     try {
-      body = await fetchHtmlChecked(this.site + chapterPath, options);
+      body = await fetchCheckedHtml(this.site + chapterPath, options);
     } catch (error) {
       const replacement = await this.findMovedChapter(chapterPath);
       if (!replacement) throw error;
-      body = await fetchHtmlChecked(replacement, options);
+      body = await fetchCheckedHtml(replacement, options);
     }
     const $ = load(body);
 

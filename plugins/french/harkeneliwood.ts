@@ -1,20 +1,47 @@
 import { CheerioAPI, load } from 'cheerio';
-import { fetchHtmlChecked } from '@libs/fetch';
+import { fetchApi } from '@libs/fetch';
 import { Plugin } from '@/types/plugin';
 import { defaultCover } from '@libs/defaultCover';
 import { NovelStatus } from '@libs/novelStatus';
 import dayjs from 'dayjs';
+
+const challengeTitles = new Set([
+  'bot verification',
+  'you are being redirected...',
+  'un instant...',
+  'just a moment...',
+  'redirecting...',
+]);
+
+async function fetchCheckedHtml(
+  url: string,
+  init?: Parameters<typeof fetchApi>[1],
+): Promise<string> {
+  const response = await fetchApi(url, init);
+  if (!response.ok)
+    throw new Error(`HTTP ${response.status} while loading ${url}`);
+  const html = await response.text();
+  const title = html
+    .match(/<title[^>]*>(.*?)<\/title>/is)?.[1]
+    ?.replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  if (title && challengeTitles.has(title))
+    throw new Error(`Bot challenge while loading ${url}`);
+  return html;
+}
 
 class HarkenEliwoodPlugin implements Plugin.PluginBase {
   id = 'harkeneliwood';
   name = 'HarkenEliwood';
   icon = 'src/fr/harkeneliwood/icon.png';
   site = 'https://harkeneliwood.wordpress.com';
-  version = '1.0.2';
+  version = '1.0.3';
 
   async getCheerio(url: string): Promise<CheerioAPI> {
     return load(
-      await fetchHtmlChecked(url, {
+      await fetchCheckedHtml(url, {
         headers: { 'Accept-Encoding': 'deflate' },
       }),
     );

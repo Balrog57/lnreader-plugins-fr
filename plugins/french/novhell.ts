@@ -1,19 +1,46 @@
 import { CheerioAPI, load } from 'cheerio';
-import { fetchHtmlChecked } from '@libs/fetch';
+import { fetchApi } from '@libs/fetch';
 import { Plugin } from '@/types/plugin';
 import { defaultCover } from '@libs/defaultCover';
 import { NovelStatus } from '@libs/novelStatus';
+
+const challengeTitles = new Set([
+  'bot verification',
+  'you are being redirected...',
+  'un instant...',
+  'just a moment...',
+  'redirecting...',
+]);
+
+async function fetchCheckedHtml(
+  url: string,
+  init?: Parameters<typeof fetchApi>[1],
+): Promise<string> {
+  const response = await fetchApi(url, init);
+  if (!response.ok)
+    throw new Error(`HTTP ${response.status} while loading ${url}`);
+  const html = await response.text();
+  const title = html
+    .match(/<title[^>]*>(.*?)<\/title>/is)?.[1]
+    ?.replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  if (title && challengeTitles.has(title))
+    throw new Error(`Bot challenge while loading ${url}`);
+  return html;
+}
 
 class NovhellPlugin implements Plugin.PluginBase {
   id = 'novhell';
   name = 'Novhell';
   icon = 'src/fr/novhell/icon.png';
   site = 'https://novhell.org';
-  version = '1.0.3';
+  version = '1.0.4';
 
   async getCheerio(url: string): Promise<CheerioAPI> {
     return load(
-      await fetchHtmlChecked(url, {
+      await fetchCheckedHtml(url, {
         headers: { 'Accept-Encoding': 'deflate' },
       }),
     );

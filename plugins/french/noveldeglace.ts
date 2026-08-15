@@ -1,20 +1,47 @@
 import { load, CheerioAPI } from 'cheerio';
-import { fetchHtmlChecked } from '@libs/fetch';
+import { fetchApi } from '@libs/fetch';
 import { Plugin } from '@/types/plugin';
 import { NovelStatus } from '@libs/novelStatus';
 import { Filters, FilterTypes } from '@libs/filterInputs';
 import { defaultCover } from '@libs/defaultCover';
+
+const challengeTitles = new Set([
+  'bot verification',
+  'you are being redirected...',
+  'un instant...',
+  'just a moment...',
+  'redirecting...',
+]);
+
+async function fetchCheckedHtml(
+  url: string,
+  init?: Parameters<typeof fetchApi>[1],
+): Promise<string> {
+  const response = await fetchApi(url, init);
+  if (!response.ok)
+    throw new Error(`HTTP ${response.status} while loading ${url}`);
+  const html = await response.text();
+  const title = html
+    .match(/<title[^>]*>(.*?)<\/title>/is)?.[1]
+    ?.replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  if (title && challengeTitles.has(title))
+    throw new Error(`Bot challenge while loading ${url}`);
+  return html;
+}
 
 class NovelDeGlacePlugin implements Plugin.PluginBase {
   id = 'noveldeglace';
   name = 'NovelDeGlace';
   icon = 'src/fr/noveldeglace/icon.png';
   site = 'https://noveldeglace.com/';
-  version = '1.0.6';
+  version = '1.0.7';
 
   async getCheerio(url: string): Promise<CheerioAPI> {
     return load(
-      await fetchHtmlChecked(url, {
+      await fetchCheckedHtml(url, {
         headers: { 'Accept-Encoding': 'deflate' },
       }),
     );
