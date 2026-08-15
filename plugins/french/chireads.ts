@@ -10,24 +10,12 @@ type WordPressCategory = {
   link: string;
 };
 
-type WordPressNovelCategory = {
-  id: number;
-  link: string;
-  parent: number;
-};
-
-type WordPressPost = {
-  date: string;
-  slug: string;
-  title: { rendered: string };
-};
-
 class ChireadsPlugin implements Plugin.PluginBase {
   id = 'chireads';
   name = 'Chireads';
   icon = 'src/fr/chireads/icon.png';
   site = 'https://chireads.com';
-  version = '2.3.1';
+  version = '2.3.4';
 
   // The site is fronted by Cloudflare, which serves different HTML/JSON to a
   // plain device User-Agent (the mobile app injects its own UA via fetchApi)
@@ -191,102 +179,6 @@ class ChireadsPlugin implements Plugin.PluginBase {
     return novels;
   }
 
-  private async restJson(url: string): Promise<Response> {
-    let lastStatus = 0;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const response = await fetchApi(url, { headers: this.restHeaders });
-      if (response.ok) return response;
-      lastStatus = response.status;
-      if (response.status !== 429 && response.status < 500) break;
-      await new Promise(resolve => setTimeout(resolve, 400 * (attempt + 1)));
-    }
-    throw new Error(`HTTP ${lastStatus} while loading ${url}`);
-  }
-
-  private async resolveCategory(path: string): Promise<number> {
-    const parts = new URL(path, this.site).pathname.split('/').filter(Boolean);
-    const slug = parts[parts.length - 1];
-    if (!slug) throw new Error('Invalid Chireads novel path');
-
-    const categoryResponse = await this.restJson(
-      `${this.site}/wp-json/wp/v2/categories?slug=${encodeURIComponent(decodeURIComponent(slug))}&per_page=100&_fields=id,link,parent`,
-    );
-    const categoryData: unknown = await categoryResponse.json();
-    if (!Array.isArray(categoryData))
-      throw new Error('Category lookup returned invalid data');
-    const category = categoryData.find(
-      (item): item is WordPressNovelCategory =>
-        item !== null &&
-        typeof item === 'object' &&
-        typeof (item as WordPressNovelCategory).id === 'number' &&
-        typeof (item as WordPressNovelCategory).link === 'string' &&
-        [2, 811].includes((item as WordPressNovelCategory).parent) &&
-        this.toPath((item as WordPressNovelCategory).link) === path,
-    );
-    if (!category) throw new Error('Chireads novel category not found');
-    return category.id;
-  }
-
-  private async fetchChapterPage(
-    categoryId: number,
-    page: number,
-  ): Promise<Plugin.SourcePage & { totalPages: number }> {
-    if (!Number.isInteger(page) || page < 1) throw new Error('Invalid page');
-
-    const postsResponse = await this.restJson(
-      `${this.site}/wp-json/wp/v2/posts?categories=${categoryId}&per_page=100&page=${page}&orderby=date&order=asc&_fields=slug,title,date`,
-    );
-    const postData: unknown = await postsResponse.json();
-    if (
-      !Array.isArray(postData) ||
-      !postData.every(
-        post =>
-          post !== null &&
-          typeof post === 'object' &&
-          typeof (post as WordPressPost).date === 'string' &&
-          typeof (post as WordPressPost).slug === 'string' &&
-          typeof (post as WordPressPost).title?.rendered === 'string',
-      )
-    )
-      throw new Error('Chapter page returned invalid data');
-
-    const chapters = new Map<string, Plugin.ChapterItem>();
-    for (const post of postData as WordPressPost[]) {
-      const path = `/c/${post.slug}/`;
-      const title = load(post.title.rendered).text().trim();
-      const match = title.match(
-        /^Chapitre\s+(\d+(?:[.,]\d+)?)\s*(?:(?:–|-|:)\s*)?(.*)$/i,
-      );
-      chapters.set(path, {
-        name: match
-          ? `${match[1]}${match[2] ? ` - ${match[2].trim()}` : ''}`
-          : title,
-        path,
-        ...(match ? { chapterNumber: Number(match[1].replace(',', '.')) } : {}),
-        releaseTime: post.date.slice(0, 10),
-      });
-    }
-
-    const totalPages = Number(postsResponse.headers.get('x-wp-totalpages'));
-    return {
-      chapters: [...chapters.values()],
-      totalPages:
-        Number.isInteger(totalPages) && totalPages > 0 ? totalPages : 1,
-    };
-  }
-
-  private async allChapters(novelPath: string): Promise<Plugin.ChapterItem[]> {
-    const categoryId = await this.resolveCategory(this.toPath(novelPath));
-    const first = await this.fetchChapterPage(categoryId, 1);
-    const chapters = new Map<string, Plugin.ChapterItem>();
-    for (const chapter of first.chapters) chapters.set(chapter.path, chapter);
-    for (let page = 2; page <= first.totalPages; page++) {
-      const next = await this.fetchChapterPage(categoryId, page);
-      for (const chapter of next.chapters) chapters.set(chapter.path, chapter);
-    }
-    return [...chapters.values()];
-  }
-
   async parseNovel(novelPath: string): Promise<Plugin.SourceNovel> {
     const novel: Plugin.SourceNovel = {
       path: this.toPath(novelPath),
@@ -316,7 +208,39 @@ class ChireadsPlugin implements Plugin.PluginBase {
       }
     });
 
-    novel.chapters = await this.allChapters(novel.path);
+    const chapters = new Map<string, Plugin.ChapterItem>();
+    $('.refresh-detail-chapter-list a').each((i, el) => {
+      const chapterUrl = $(el).attr('href');
+      const path = this.compactChapterPath(chapterUrl);
+      if (!path || chapters.has(path)) return;
+
+      const title = $(el).text().trim();
+      const match = title.match(
+        /^Chapitre\s+(\d+(?:[.,]\d+)?)\s*(?:(?:–|-|:)\s*)?(.*)$/i,
+      );
+      const segments = new URL(chapterUrl!, this.site).pathname
+        .split('/')
+        .filter(Boolean);
+      const date = segments.slice(-3);
+      const hasDate =
+        /^\d{4}$/.test(date[0] || '') &&
+        /^\d{1,2}$/.test(date[1] || '') &&
+        /^\d{1,2}$/.test(date[2] || '');
+
+      chapters.set(path, {
+        name: match
+          ? `${match[1]}${match[2] ? ` - ${match[2].trim()}` : ''}`
+          : title,
+        path,
+        ...(match ? { chapterNumber: Number(match[1].replace(',', '.')) } : {}),
+        ...(hasDate
+          ? {
+              releaseTime: `${date[0]}-${date[1].padStart(2, '0')}-${date[2].padStart(2, '0')}`,
+            }
+          : {}),
+      });
+    });
+    novel.chapters = Array.from(chapters.values());
 
     return novel;
   }

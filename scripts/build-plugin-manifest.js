@@ -168,6 +168,12 @@ json.sort((a, b) => {
   return 0;
 });
 
+// Manifest URLs use the legacy path, so keep it in sync for local serving too.
+fs.cpSync(COMPILED_PLUGIN_DIR, './.js/src/plugins', {
+  recursive: true,
+  force: true,
+});
+
 fs.writeFileSync(jsonMinPath, JSON.stringify(json));
 fs.writeFileSync(jsonPath, JSON.stringify(json, null, '\t'));
 

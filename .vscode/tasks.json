@@ -1,0 +1,95 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Android: environnement complet",
+      "dependsOrder": "parallel",
+      "dependsOn": [
+        "Android: démarrer Medium Phone",
+        "LNReader Plugins: Catalogue mobile"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "LNReader Plugins: Playground",
+      "type": "npm",
+      "script": "dev:start",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": { "regexp": ".*" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": "^(?!)$"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      }
+    },
+    {
+      "label": "LNReader Plugins: Catalogue mobile",
+      "type": "shell",
+      "command": "npm run serve:dev",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "serve",
+        "pattern": { "regexp": ".*" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": "^(?!)$"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      }
+    },
+    {
+      "label": "Android: démarrer Medium Phone",
+      "type": "shell",
+      "command": "& \"${env:LOCALAPPDATA}\\Android\\Sdk\\emulator\\emulator.exe\" -avd Medium_Phone",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "never",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Android: démarrer Medium Tablet",
+      "type": "shell",
+      "command": "& \"${env:LOCALAPPDATA}\\Android\\Sdk\\emulator\\emulator.exe\" -avd Medium_Tablet",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "never",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Android: connexion ADB inverse",
+      "type": "shell",
+      "command": "& \"${env:LOCALAPPDATA}\\Android\\Sdk\\platform-tools\\adb.exe\" reverse tcp:3000 tcp:3000",
+      "problemMatcher": []
+    },
+    {
+      "label": "Plugin: live-check fichier courant",
+      "type": "shell",
+      "command": "npm run check:plugin -- ${file}",
+      "problemMatcher": []
+    },
+    {
+      "label": "Validation: plugin français",
+      "type": "npm",
+      "script": "lint:french",
+      "problemMatcher": "$eslint-stylish",
+      "group": "test"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "eslint.validate": ["javascript", "typescript"],
+  "files.exclude": {
+    "**/.dist": true,
+    "**/.js": true,
+    "**/node_modules": true
+  },
+  "search.exclude": {
+    "**/.dist": true,
+    "**/node_modules": true
+  },
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+  "terminal.integrated.env.windows": {
+    "ANDROID_HOME": "${env:LOCALAPPDATA}\\Android\\Sdk",
+    "ANDROID_SDK_ROOT": "${env:LOCALAPPDATA}\\Android\\Sdk"
+  }
+}

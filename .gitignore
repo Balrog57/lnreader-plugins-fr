@@ -1,5 +1,4 @@
 node_modules
-.vscode
 .idea
 .env
 config.json
@@ -15,7 +14,12 @@ dist
 total.svg
 .history
 broken-sites-report.json
+.logs/
 
 .agents/
 .claude/
 .cursor/
+
+# VS Code workspace configuration
+!.vscode/
+!.vscode/*.json

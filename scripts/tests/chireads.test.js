@@ -105,10 +105,10 @@ test('Chireads finds Panlong through translated novel categories', async t => {
       },
     ],
   );
-  assert.equal(plugin.version, '2.3.1');
+  assert.equal(plugin.version, '2.3.4');
 });
 
-test('Chireads loads the full chapter list across WordPress pages', async t => {
+test('Chireads loads the full chapter list from the novel page', async t => {
   const largePath = '/category/translatedtales/large-series/';
   const posts = Array.from({ length: 205 }, (_, index) => ({
     date: `2026-01-${String((index % 28) + 1).padStart(2, '0')}T17:00:00`,
@@ -121,26 +121,18 @@ test('Chireads loads the full chapter list across WordPress pages', async t => {
       const parsed = new URL(url);
       const key = parsed.pathname + parsed.search;
       let body;
-      let totalPages;
-      if (key === largePath)
-        body = '<h1 class="refresh-detail-title">Large series</h1>';
-      else if (parsed.pathname.endsWith('/categories'))
-        body = JSON.stringify([
-          {
-            id: 900,
-            link: `https://chireads.com${largePath}`,
-            parent: 2,
-          },
-        ]);
-      else if (parsed.pathname.endsWith('/posts')) {
-        const page = Number(parsed.searchParams.get('page'));
-        body = JSON.stringify(posts.slice((page - 1) * 100, page * 100));
-        totalPages = '3';
+      if (key === largePath) {
+        const links = posts
+          .map(post => {
+            const date = post.date.slice(0, 10).replaceAll('-', '/');
+            return `<li><a href="https://chireads.com/translatedtales/large-series/${post.slug}/${date}/">${post.title.rendered}</a></li>`;
+          })
+          .join('');
+        body = `<h1 class="refresh-detail-title">Large series</h1><ul class="refresh-detail-chapter-list">${links}</ul>`;
       }
       return Promise.resolve(
         new Response(body ?? 'Not found', {
           status: body ? 200 : 404,
-          headers: totalPages ? { 'x-wp-totalpages': totalPages } : {},
         }),
       );
     },
@@ -205,6 +197,24 @@ test('Chireads parses all visible Myriad of the Races chapters', async t => {
     novel.chapters.map(chapter => chapter.name),
     ['1 - Père et Fils', '2 - Les académies', '3 - Original', '4 - Archive'],
   );
+});
+
+test('Chireads accepts uppercase percent-encoding in novel paths', async t => {
+  const uppercasePath = myriadPath.replace(/%[0-9a-f]{2}/g, code =>
+    code.toUpperCase(),
+  );
+  const { plugin, restore } = await loadPluginForTest(
+    'plugins/french/chireads.ts',
+    url =>
+      new URL(url).pathname === uppercasePath
+        ? fixtureFetch(`https://chireads.com${myriadPath}`)
+        : fixtureFetch(url),
+  );
+  t.after(restore);
+
+  const novel = await plugin.parseNovel(uppercasePath);
+
+  assert.equal(novel.chapters.length, 4);
 });
 
 test('Chireads resolves compact chapter paths through the compact endpoint', async t => {
