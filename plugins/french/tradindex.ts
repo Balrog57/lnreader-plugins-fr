@@ -4,7 +4,7 @@ import { fetchApi } from '@libs/fetch';
 import { NovelStatus } from '@libs/novelStatus';
 import { Plugin } from '@/types/plugin';
 
-const catalogueTypes = ['Web+Novel', 'Light+Novel', 'Manhwa'];
+const catalogueTypes = ['Web Novel', 'Light Novel', 'Manhwa'];
 const chapterPathPattern =
   /^(?:https?:\/\/trad-index\.com)?\/oeuvre\/([^/?#]+)\/chapitre\/(\d+(?:[.,]\d+)?)/;
 
@@ -13,7 +13,7 @@ class TradIndexPlugin implements Plugin.PluginBase {
   name = 'Trad-Index';
   icon = 'src/fr/tradindex/icon.png';
   site = 'https://trad-index.com/';
-  version = '1.0.7';
+  version = '1.0.8';
 
   // The app injects its own device User-Agent; send a desktop one so the
   // server-rendered catalogue/chapter pages stay identical on mobile.
@@ -102,12 +102,12 @@ class TradIndexPlugin implements Plugin.PluginBase {
         cover: cover ? new URL(cover, this.site).href : defaultCover,
       });
     });
-    return [...novels.values()];
+    return Array.from(novels.values());
   }
 
   private cataloguePath(type: string, pageNo: number, searchTerm?: string) {
     const query = searchTerm ? `&q=${encodeURIComponent(searchTerm)}` : '';
-    return `/catalogue?type=${type}${query}&page=${pageNo}`;
+    return `/catalogue?type=${encodeURIComponent(type)}${query}&page=${pageNo}`;
   }
 
   private chapterItems(html: string, slug: string): Plugin.ChapterItem[] {
@@ -127,7 +127,7 @@ class TradIndexPlugin implements Plugin.PluginBase {
         chapterNumber: number,
       });
     });
-    return [...chapters.values()];
+    return Array.from(chapters.values());
   }
 
   private async fetchChapterPages(
@@ -159,7 +159,7 @@ class TradIndexPlugin implements Plugin.PluginBase {
         chapters.set(chapter.path, chapter);
       }
     }
-    return [...chapters.values()].sort(
+    return Array.from(chapters.values()).sort(
       (left, right) => (left.chapterNumber || 0) - (right.chapterNumber || 0),
     );
   }
@@ -169,14 +169,14 @@ class TradIndexPlugin implements Plugin.PluginBase {
     const pages = await this.catalogueSections(
       catalogueTypes.map(type => this.cataloguePath(type, sitePage)),
     );
-    const novels = [
-      ...new Map(
+    const novels = Array.from(
+      new Map(
         pages
           .flat()
           .flatMap(html => this.parseCards(html))
           .map(novel => [novel.path, novel]),
       ).values(),
-    ];
+    );
     if (sitePage === 1 && !novels.length)
       throw new Error('Trad-Index catalogue returned no work cards');
     return novels;
@@ -189,13 +189,13 @@ class TradIndexPlugin implements Plugin.PluginBase {
     const pages = await this.catalogueSections(
       catalogueTypes.map(type => this.cataloguePath(type, pageNo, searchTerm)),
     );
-    return [
-      ...new Map(
+    return Array.from(
+      new Map(
         pages
           .flatMap(html => this.parseCards(html))
           .map(novel => [novel.path, novel]),
       ).values(),
-    ];
+    );
   }
 
   async parseNovel(novelPath: string): Promise<Plugin.SourceNovel> {

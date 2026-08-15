@@ -6,27 +6,27 @@ import { loadPluginForTest } from './helpers/load-plugin.js';
 const prose = `Premier paragraphe. ${'Texte public lisible. '.repeat(12)}`;
 const moreProse = `Second paragraphe. ${'Suite du chapitre public. '.repeat(12)}`;
 const fixtures = {
-  '/catalogue?type=Web+Novel&page=1': `
+  '/catalogue?type=Web%20Novel&page=1': `
     <a href="/oeuvre/roman-web"><img src="/roman.webp"><span class="font-mono">12 ch.</span><span class="line-clamp-3 font-display">Roman Web</span><span class="truncate font-mono">Wuxia France</span></a>
     <a href="/oeuvre/dungeon-hunter"><span class="font-mono">35 ch.</span><span class="line-clamp-3 font-display">Dungeon Hunter</span><span class="truncate font-mono">Slimegate</span></a>
-    <a href="?type=Web+Novel&page=2">2</a>
+    <a href="?type=Web%20Novel&page=2">2</a>
   `,
-  '/catalogue?type=Web+Novel&page=2': `
+  '/catalogue?type=Web%20Novel&page=2': `
     <a href="/oeuvre/second-web"><span class="line-clamp-3 font-display">Second Web</span></a>
   `,
-  '/catalogue?type=Light+Novel&page=1': `
+  '/catalogue?type=Light%20Novel&page=1': `
     <a href="/oeuvre/dungeon-hunter"><img src="/dungeon.webp"><span class="font-mono">35 ch.</span><span class="line-clamp-3 font-display">Dungeon Hunter</span><span class="truncate font-mono">Slimegate</span></a>
   `,
   '/catalogue?type=Manhwa&page=1': `
     <a href="/oeuvre/the-wolf-and-the-delinquent"><img src="/wolf.webp"><span class="font-mono">À paraître</span><span class="line-clamp-3 font-display">The Wolf and the Delinquent</span><span class="truncate font-mono">Demonic Wolf Twins</span></a>
   `,
-  '/catalogue?type=Web+Novel&page=3': '',
-  '/catalogue?type=Light+Novel&page=3': '',
+  '/catalogue?type=Web%20Novel&page=3': '',
+  '/catalogue?type=Light%20Novel&page=3': '',
   '/catalogue?type=Manhwa&page=3': '',
-  '/catalogue?type=Web+Novel&q=Dungeon&page=1': `
+  '/catalogue?type=Web%20Novel&q=Dungeon&page=1': `
     <a href="/oeuvre/dungeon-hunter"><img src="/dungeon.webp"><span class="font-mono">35 ch.</span><span class="line-clamp-3 font-display">Dungeon Hunter</span><span class="truncate font-mono">Slimegate</span></a>
   `,
-  '/catalogue?type=Light+Novel&q=Dungeon&page=1': `
+  '/catalogue?type=Light%20Novel&q=Dungeon&page=1': `
     <a href="/oeuvre/dungeon-hunter"><img src="/dungeon.webp"><span class="font-mono">35 ch.</span><span class="line-clamp-3 font-display">Dungeon Hunter</span><span class="truncate font-mono">Slimegate</span></a>
   `,
   '/catalogue?type=Manhwa&q=Dungeon&page=1': '',
@@ -83,14 +83,14 @@ test('Trad-Index lists and searches every tracked work type', async t => {
   );
   t.after(restore);
 
-  assert.equal(plugin.version, '1.0.7');
+  assert.equal(plugin.version, '1.0.8');
 
   const popular = await plugin.popularNovels(1, {});
   assert.deepEqual(
     popular.map(novel => novel.name),
     ['Roman Web', 'Dungeon Hunter', 'The Wolf and the Delinquent'],
   );
-  assert.equal(requests.includes('/catalogue?type=Web+Novel&page=2'), false);
+  assert.equal(requests.includes('/catalogue?type=Web%20Novel&page=2'), false);
   assert.deepEqual(
     (await plugin.popularNovels(2, {})).map(novel => novel.name),
     ['Second Web'],
@@ -196,7 +196,7 @@ test('Trad-Index keeps search results when one catalogue is unavailable', async 
   const { plugin, restore } = await loadPluginForTest(
     'plugins/french/tradindex.ts',
     url =>
-      url.includes('type=Light+Novel&q=')
+      url.includes('type=Light%20Novel&q=')
         ? Promise.reject(new Error('Temporary catalogue failure'))
         : fixtureFetch(url),
   );
