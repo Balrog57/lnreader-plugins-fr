@@ -31,6 +31,14 @@ que les exports réellement fournis par l'app : `fetchApi`, `fetchText`,
 Le playground (`vite`) et `check:plugin` aliasent `@libs` vers `src/libs` de ce
 repo et peuvent masquer un import inexistant côté app : ne pas s'y fier seul.
 
+## Contrainte de compilation ES5
+
+`tsconfig.production.json` cible ES5 avec `downlevelIteration` désactivé.
+Conséquence : étaler un itérateur (`[...map.values()]`, `[...new Set]`)
+compile en `__spreadArray([], it, true)` qui renvoie `[]` sur l'app. Utiliser
+`Array.from(...)` pour les itérateurs (et non l'étalement). Les `for...of` sur
+des tableaux et l'étalement d'objets (`{...obj}`) restent corrects.
+
 ## Objectif qualité
 
 Faire fonctionner l'intégralité des plugins français (les 14, dont J-Garden,
