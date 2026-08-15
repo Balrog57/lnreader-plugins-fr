@@ -37,7 +37,7 @@ class NovelDeGlacePlugin implements Plugin.PluginBase {
   name = 'NovelDeGlace';
   icon = 'src/fr/noveldeglace/icon.png';
   site = 'https://noveldeglace.com/';
-  version = '1.0.7';
+  version = '1.0.8';
 
   async getCheerio(url: string): Promise<CheerioAPI> {
     return load(
@@ -236,7 +236,10 @@ class NovelDeGlacePlugin implements Plugin.PluginBase {
         });
     });
 
-    novel.chapters = novelChapters;
+    novel.chapters = novelChapters.map((chapter, index) => ({
+      ...chapter,
+      chapterNumber: index,
+    }));
 
     return novel;
   }
